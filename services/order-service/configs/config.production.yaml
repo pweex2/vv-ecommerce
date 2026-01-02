@@ -1,0 +1,14 @@
+ServerPort: 8081
+Database:
+  Host: prod_db_host
+  Port: "3306"
+  User: root
+  Password: root
+  DBName: order_db
+Redis:
+  Addr: prod_redis_host:6379
+  Password: prod_redis_password
+  DB: 0
+MQ:
+  Host: prod_mq_host
+  Port: "5672"

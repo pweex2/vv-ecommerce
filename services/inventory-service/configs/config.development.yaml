@@ -1,0 +1,17 @@
+ServerPort: 8082
+Database:
+  Host: localhost
+  Port: "3306"
+  User: root
+  Password: root
+  DBName: inventory_db
+Redis:
+  Host: localhost
+  Port: "6379"
+  Password: ""
+  DB: 0
+MQ:
+  Host: localhost
+  Port: "5672"
+  User: guest
+  Password: guest

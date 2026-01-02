@@ -1,0 +1,24 @@
+{
+  "folders": [
+    {
+      "path": "services/order-service"
+    },
+    {
+      "path": "services/inventory-service"
+    },
+    {
+      "path": "services/payment-service"
+    },
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.git": true
+    },
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  }
+}
