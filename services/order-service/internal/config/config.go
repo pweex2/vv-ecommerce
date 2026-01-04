@@ -34,6 +34,7 @@ type MQConfig struct {
 type Config struct {
 	ServerPort          int    `mapstructure:"ServerPort"`
 	InventoryServiceURL string `mapstructure:"InventoryServiceURL"`
+	PaymentServiceURL   string `mapstructure:"PaymentServiceURL"`
 
 	Database DatabaseConfig `mapstructure:"Database"`
 	Redis    RedisConfig    `mapstructure:"Redis"` // 占位符

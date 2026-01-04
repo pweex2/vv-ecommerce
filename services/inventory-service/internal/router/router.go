@@ -1,0 +1,28 @@
+package router
+
+import (
+	"fmt"
+	"inventory-service/internal/handler"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+func NewRouter(h *handler.InventoryHandler) *gin.Engine {
+	r := gin.Default()
+
+	// Health Check
+	r.GET("/health", func(c *gin.Context) {
+		c.String(http.StatusOK, "Inventory Service is healthy")
+		fmt.Println("Inventory Service is healthy")
+	})
+
+	// Inventory Routes
+	r.GET("/inventories", h.GetInventoriesByProductID)
+	r.GET("/inventory/sku", h.GetInventoryBySKU)
+	r.POST("/inventory/create", h.CreateInventory)
+	r.POST("/inventory/update", h.UpdateInventory)
+	r.POST("/inventory/decrease", h.DecreaseInventory)
+
+	return r
+}

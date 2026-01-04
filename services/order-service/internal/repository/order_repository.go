@@ -9,7 +9,7 @@ import (
 type OrderRepository interface {
 	CreateOrder(order *model.Order) error
 	GetOrderByID(orderID string) (*model.Order, error)
-	UpdateOrderStatus(orderID, status string) (int64, error)
+	UpdateOrderStatus(orderID string, status model.OrderStatus) (int64, error)
 }
 
 type GORMOrderRepository struct {
@@ -33,7 +33,7 @@ func (r *GORMOrderRepository) GetOrderByID(orderID string) (*model.Order, error)
 	return &order, err
 }
 
-func (r *GORMOrderRepository) UpdateOrderStatus(orderID, status string) (int64, error) {
+func (r *GORMOrderRepository) UpdateOrderStatus(orderID string, status model.OrderStatus) (int64, error) {
 	result := r.db.Model(&model.Order{}).Where("order_id = ? AND status != ?", orderID, status).Update("status", status) // 使用 GORM 的 Model, Where 和 Update 方法
 	return result.RowsAffected, result.Error
 }

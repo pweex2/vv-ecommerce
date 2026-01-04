@@ -1,6 +1,9 @@
 {
   "folders": [
     {
+      "path": "."
+    },
+    {
       "path": "services/order-service"
     },
     {
@@ -8,9 +11,6 @@
     },
     {
       "path": "services/payment-service"
-    },
-    {
-      "path": "."
     }
   ],
   "settings": {

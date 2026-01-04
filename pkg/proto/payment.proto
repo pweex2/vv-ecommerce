@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package payment;
+
+option go_package = "vv-ecommerce/pkg/proto/payment";
+
+service PaymentService {
+  rpc ProcessPayment (ProcessPaymentRequest) returns (ProcessPaymentResponse);
+}
+
+message ProcessPaymentRequest {
+  string order_id = 1;
+  int64 amount = 2;
+}
+
+message ProcessPaymentResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+}

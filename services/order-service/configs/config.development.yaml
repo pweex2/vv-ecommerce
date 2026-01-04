@@ -1,5 +1,7 @@
 ServerPort: 8081
 InventoryServiceURL: http://localhost:8082
+PaymentServiceURL: http://localhost:8083
+
 Database:
   Host: localhost
   Port: "3306"

@@ -1,4 +1,4 @@
-module inventory-service
+module payment-service
 
 go 1.25.1
 

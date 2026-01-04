@@ -7,17 +7,13 @@ import (
 	"order-service/internal/config"
 	"order-service/internal/handler"
 	"order-service/internal/repository"
+	"order-service/internal/router"
 	"order-service/internal/service"
 	"vv-ecommerce/pkg/clients"
 
 	"gorm.io/driver/mysql" // GORM MySQL 驱动
 	"gorm.io/gorm"         // GORM 核心库
 )
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Order Service is healthy")
-}
 
 func main() {
 	// Load configuration
@@ -44,26 +40,13 @@ func main() {
 
 	// Initialize repository, service, and handler
 	var orderRepo repository.OrderRepository = repository.NewOrderRepository(db)
-	orderService := service.NewOrderService(orderRepo, clients.NewInventoryClient(cfg.InventoryServiceURL))
+	orderService := service.NewOrderService(orderRepo, clients.NewInventoryClient(cfg.InventoryServiceURL), clients.NewPaymentClient(cfg.PaymentServiceURL))
 	orderHandler := handler.NewOrderHandler(orderService)
 
 	// Routes
-	http.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			orderHandler.CreateOrderHandler(w, r)
-		case http.MethodGet:
-			orderHandler.GetOrderHandler(w, r)
-		case http.MethodPatch:
-			orderHandler.UpdateOrderStatusHandler(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/health", healthHandler)
+	r := router.NewRouter(orderHandler)
 
 	serverAddr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Printf("Order Service running on %s", serverAddr)
-	log.Fatal(http.ListenAndServe(serverAddr, nil))
+	log.Fatal(http.ListenAndServe(serverAddr, r))
 }

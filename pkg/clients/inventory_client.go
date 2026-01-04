@@ -48,6 +48,13 @@ func (c *InventoryClient) Decrease(sku, reqID string, qty int64) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		// 尝试读取错误信息
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
+			return errors.New(errResp.Error)
+		}
 		return errors.New("inventory decrease failed")
 	}
 
