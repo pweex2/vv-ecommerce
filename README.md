@@ -112,4 +112,5 @@ Currently, this project is optimized for local development. To move towards a pr
 - **🛡️ Resilience**: Apply **Circuit Breakers** (e.g., Hystrix/GoResilience) and **Retries** with exponential backoff to prevent cascading failures.
 - **🗄️ Data Management**: Replace `AutoMigrate` with versioned **Database Migrations** (e.g., Golang-Migrate) for safe schema evolution.
 - **📝 Documentation**: Auto-generate API documentation using **Swagger/OpenAPI** to keep API contracts up-to-date.
+- **⚡ High Performance Communication**: Migrate internal service-to-service communication from HTTP/REST to **gRPC** (Protobuf) for lower latency and strict schema enforcement.
 - **🚀 CI/CD**: Set up automated pipelines (GitHub Actions) for testing, building, and deploying.
