@@ -12,3 +12,6 @@
 *.swp
 .DS_Store
 Thumbs.db
+
+# Environment Variables
+.env
