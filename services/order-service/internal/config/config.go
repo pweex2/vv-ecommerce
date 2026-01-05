@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -33,8 +34,8 @@ type MQConfig struct {
 // Config 应用程序配置
 type Config struct {
 	ServerPort          int    `mapstructure:"ServerPort"`
-	InventoryServiceURL string `mapstructure:"InventoryServiceURL"`
-	PaymentServiceURL   string `mapstructure:"PaymentServiceURL"`
+	InventoryServiceURL string `mapstructure:"inventory_service_url"`
+	PaymentServiceURL   string `mapstructure:"payment_service_url"`
 
 	Database DatabaseConfig `mapstructure:"Database"`
 	Redis    RedisConfig    `mapstructure:"Redis"` // 占位符
@@ -71,7 +72,14 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("Database.Password", "root")
 	viper.SetDefault("Database.DBName", "order_db")
 
-	// 从环境变量读取配置，环境变量会覆盖配置文件中的值
+	// Allow environment variables to override config, replacing . with _ (e.g. Database.Port -> DATABASE_PORT)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// Explicitly bind service URLs
+	viper.BindEnv("InventoryServiceURL", "INVENTORY_SERVICE_URL")
+	viper.BindEnv("PaymentServiceURL", "PAYMENT_SERVICE_URL")
+
+	// Read config from environment variables
 	viper.AutomaticEnv()
 
 	cfg := &Config{}

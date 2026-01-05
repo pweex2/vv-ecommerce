@@ -8,7 +8,10 @@ require (
 	github.com/spf13/viper v1.21.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
+	vv-ecommerce/pkg v0.0.0
 )
+
+replace vv-ecommerce/pkg => ../../pkg
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect

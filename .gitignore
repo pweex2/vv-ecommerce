@@ -15,3 +15,7 @@ Thumbs.db
 
 # Environment Variables
 .env
+
+# Go Workspaces
+go.work
+go.work.sum

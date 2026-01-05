@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -67,6 +68,8 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("MQ.User", "guest")
 	viper.SetDefault("MQ.Password", "guest")
 
+	// Allow environment variables to override config, replacing . with _
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
 
 	cfg := &Config{}

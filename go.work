@@ -1,8 +1,0 @@
-go 1.25.1
-
-use (
-./pkg
-./services/order-service
-./services/inventory-service
-./services/payment-service
-)

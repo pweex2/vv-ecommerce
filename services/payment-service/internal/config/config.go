@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -46,6 +47,8 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("Database.Password", "root")
 	viper.SetDefault("Database.DBName", "payment_db")
 
+	// Allow environment variables to override config, replacing . with _
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	cfg := &Config{}
