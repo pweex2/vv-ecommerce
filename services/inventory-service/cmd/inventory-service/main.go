@@ -11,6 +11,7 @@ import (
 	"inventory-service/internal/repository"
 	"inventory-service/internal/router"
 	"inventory-service/internal/service"
+	"vv-ecommerce/pkg/database"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -35,8 +36,9 @@ func main() {
 		log.Fatalf("Failed to auto migrate database: %v", err)
 	}
 
+	tm := database.NewTransactionManager(db)
 	var inventoryRepo repository.InventoryRepository = repository.NewInventoryRepository(db)
-	inventoryService := service.NewInventoryService(inventoryRepo)
+	inventoryService := service.NewInventoryService(inventoryRepo, tm)
 	inventoryHandler := handler.NewInventoryHandler(inventoryService)
 
 	r := router.NewRouter(inventoryHandler)

@@ -34,7 +34,7 @@ func (h *InventoryHandler) GetInventoriesByProductID(c *gin.Context) {
 		return
 	}
 
-	inventories, err := h.service.GetInventoriesByProductID(uint(productID))
+	inventories, err := h.service.GetInventoriesByProductID(c.Request.Context(), uint(productID))
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -50,7 +50,7 @@ func (h *InventoryHandler) GetInventoryBySKU(c *gin.Context) {
 		return
 	}
 
-	inventory, err := h.service.GetInventoryBySKU(sku)
+	inventory, err := h.service.GetInventoryBySKU(c.Request.Context(), sku)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -64,6 +64,8 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 		RequestID string `json:"request_id"` // 可选，如果为空则自动生成
 		SKU       string `json:"sku" binding:"required"`
 		Quantity  int    `json:"quantity" binding:"required,gt=0"`
+		OrderID   string `json:"order_id" binding:"required"` // 业务订单号
+		TraceID   string `json:"trace_id"`                    // 追踪 ID
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,13 +77,32 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 		req.RequestID = uuid.New().String()
 	}
 
-	// 修正参数顺序：reqID, sku, quantity
-	if err := h.service.DecreaseInventory(req.RequestID, req.SKU, req.Quantity); err != nil {
+	// 修正参数顺序：reqID, sku, orderID, traceID, quantity
+	if err := h.service.DecreaseInventory(c.Request.Context(), req.RequestID, req.SKU, req.OrderID, req.TraceID, req.Quantity); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	response.Success(c, map[string]string{"message": "Inventory decreased successfully"})
+}
+
+func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
+	var req struct {
+		SKU      string `json:"sku" binding:"required"`
+		Quantity int    `json:"quantity" binding:"required,gt=0"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		return
+	}
+
+	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, map[string]string{"message": "Inventory increased successfully"})
 }
 
 func (h *InventoryHandler) CreateInventory(c *gin.Context) {
@@ -96,7 +117,7 @@ func (h *InventoryHandler) CreateInventory(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.CreateInventory(req.SKU, req.ProductID, req.Quantity); err != nil {
+	if err := h.service.CreateInventory(c.Request.Context(), req.SKU, req.ProductID, req.Quantity); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -115,7 +136,7 @@ func (h *InventoryHandler) UpdateInventory(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.UpdateInventory(req.SKU, req.Quantity); err != nil {
+	if err := h.service.UpdateInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}

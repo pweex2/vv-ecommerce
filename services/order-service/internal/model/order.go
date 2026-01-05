@@ -1,11 +1,12 @@
 package model
 
 type Order struct {
-	OrderID     string      `json:"order_id"`
+	ID          uint        `gorm:"primaryKey" json:"id"`                     // 数据库内部 ID (Primary Key)
+	OrderID     string      `gorm:"type:varchar(255);unique" json:"order_id"` // 业务订单 ID (Business Key)
 	UserID      int64       `json:"user_id"`
 	Status      OrderStatus `json:"status"`
 	TotalAmount int64       `json:"total_amount"`
-	TraceID     string      `json:"trace_id"`
+	TraceID     string      `gorm:"type:varchar(255);index" json:"trace_id"` // 追踪 ID
 }
 
 type OrderStatus string

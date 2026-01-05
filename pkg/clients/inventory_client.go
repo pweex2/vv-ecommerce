@@ -31,11 +31,35 @@ func (c *InventoryClient) HealthCheck() error {
 	return nil
 }
 
-func (c *InventoryClient) Decrease(sku, reqID string, qty int64) error {
+func (c *InventoryClient) Increase(sku string, qty int64) error {
+	body, _ := json.Marshal(map[string]interface{}{
+		"sku":      sku,
+		"quantity": qty,
+	})
+
+	resp, err := c.client.Post(
+		c.baseURL+"/inventory/increase",
+		"application/json",
+		bytes.NewBuffer(body),
+	)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("inventory increase failed")
+	}
+
+	return nil
+}
+
+func (c *InventoryClient) Decrease(sku, reqID, orderID, traceID string, qty int64) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"sku":        sku,
 		"quantity":   qty,
 		"request_id": reqID,
+		"order_id":   orderID,
+		"trace_id":   traceID,
 	})
 
 	resp, err := c.client.Post(

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"order-service/internal/model"
 	"order-service/internal/repository"
 	"time"
@@ -41,7 +42,7 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 	// retry 3 times
 	for i := 0; i < 3; i++ {
 		// 调用库存服务减少库存
-		err = s.inventoryClient.Decrease(sku, reqID, totalAmount)
+		err = s.inventoryClient.Decrease(sku, reqID, orderID, traceID, totalAmount)
 		if err == nil {
 			break
 		}
@@ -54,7 +55,30 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 	s.repo.UpdateOrderStatus(orderID, model.OrderStatusInventoryReserved)
 
 	// 调用支付服务创建支付订单
-	// assume payment service is completed successfully
+	paymentResp, err := s.paymentClient.ProcessPayment(orderID, totalAmount)
+	if err != nil {
+		// 支付失败，发起库存回滚 (Compensating Transaction)
+		// 注意：实际生产中，回滚操作也可能失败，因此通常需要将回滚任务放入消息队列 (MQ) 进行异步重试
+		// 这里为了演示简单，直接同步调用，仅记录错误日志
+		if rollbackErr := s.inventoryClient.Increase(sku, totalAmount); rollbackErr != nil {
+			// Log this critical error! "Failed to rollback inventory for order %s: %v"
+			// In a real system, alert on call
+		}
+
+		s.repo.UpdateOrderStatus(orderID, model.OrderStatusFailed)
+		return nil, err
+	}
+
+	if paymentResp.Status != "COMPLETED" {
+		// 支付状态非成功，同样需要回滚
+		if rollbackErr := s.inventoryClient.Increase(sku, totalAmount); rollbackErr != nil {
+			// Log critical error
+		}
+
+		s.repo.UpdateOrderStatus(orderID, model.OrderStatusFailed)
+		return nil, errors.New("payment failed with status: " + paymentResp.Status)
+	}
+
 	s.repo.UpdateOrderStatus(orderID, model.OrderStatusPaid)
 
 	s.repo.UpdateOrderStatus(orderID, model.OrderStatusCompleted)
