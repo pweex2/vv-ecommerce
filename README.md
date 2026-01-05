@@ -13,6 +13,19 @@ This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`
 - **Configuration**: Viper
 - **Architecture**: Microservices, RESTful API
 
+## 🌐 Configuration & Networking
+
+This project handles different environments (Local vs. Production) using **Environment Variables**. The code remains the same; only the configuration changes.
+
+| Configuration | Local (Docker Compose) | Production (K8s / Cloud) |
+| :--- | :--- | :--- |
+| **Database Host** | `host.docker.internal` (Access host's Local-Infra) | `db-prod.cluster-xyz.aws.com` (Cloud RDS / Service DNS) |
+| **Service Discovery** | `http://host.docker.internal:8082` | `http://inventory-service` (K8s Internal DNS) |
+| **API Gateway** | `localhost:8080` | `api.vv-ecommerce.com` (Ingress / Load Balancer) |
+
+> **Why `host.docker.internal`?**
+> In local development, services running in Docker containers need to access resources (MySQL, Redis) running on the Windows host machine (your `local-infra`). `host.docker.internal` acts as a bridge. In production, services communicate directly via internal DNS.
+
 ## 🚀 Services
 
 | Service | Port | Description |
