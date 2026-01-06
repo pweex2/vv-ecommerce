@@ -3,7 +3,6 @@ package clients
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 )
@@ -23,10 +22,12 @@ func NewInventoryClient(url string) *InventoryClient {
 func (c *InventoryClient) HealthCheck() error {
 	resp, err := c.client.Get(c.baseURL + "/health")
 	if err != nil {
-		return err
+		return WrapClientError(err, "failed to connect to inventory service")
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("inventory health check failed")
+		return HandleHTTPError(resp)
 	}
 	return nil
 }
@@ -43,11 +44,12 @@ func (c *InventoryClient) Increase(sku string, qty int64) error {
 		bytes.NewBuffer(body),
 	)
 	if err != nil {
-		return err
+		return WrapClientError(err, "failed to connect to inventory service")
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("inventory increase failed")
+		return HandleHTTPError(resp)
 	}
 
 	return nil
@@ -68,18 +70,12 @@ func (c *InventoryClient) Decrease(sku, reqID, orderID, traceID string, qty int6
 		bytes.NewBuffer(body),
 	)
 	if err != nil {
-		return err
+		return WrapClientError(err, "failed to connect to inventory service")
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// 尝试读取错误信息
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return errors.New(errResp.Error)
-		}
-		return errors.New("inventory decrease failed")
+		return HandleHTTPError(resp)
 	}
 
 	return nil

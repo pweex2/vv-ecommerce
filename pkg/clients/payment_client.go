@@ -3,10 +3,10 @@ package clients
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
+	"vv-ecommerce/pkg/common/apperror"
 )
 
 type PaymentClient struct {
@@ -49,24 +49,17 @@ func (c *PaymentClient) ProcessPayment(orderID string, amount int64) (*PaymentRe
 		bytes.NewBuffer(body),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call payment service: %w", err)
+		return nil, WrapClientError(err, "failed to call payment service")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// 尝试读取错误信息
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return nil, errors.New(errResp.Error)
-		}
-		return nil, fmt.Errorf("payment service returned status: %d", resp.StatusCode)
+		return nil, HandleHTTPError(resp)
 	}
 
 	var paymentResp PaymentResponse
 	if err := json.NewDecoder(resp.Body).Decode(&paymentResp); err != nil {
-		return nil, fmt.Errorf("failed to decode payment response: %w", err)
+		return nil, apperror.Internal("failed to decode payment response", err)
 	}
 
 	return &paymentResp, nil
@@ -75,21 +68,21 @@ func (c *PaymentClient) ProcessPayment(orderID string, amount int64) (*PaymentRe
 func (c *PaymentClient) GetPayment(orderID string) (*PaymentResponse, error) {
 	resp, err := c.client.Get(fmt.Sprintf("%s/payments?order_id=%s", c.baseURL, orderID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to call payment service: %w", err)
+		return nil, WrapClientError(err, "failed to call payment service")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil // Not found
+		return nil, apperror.NotFound("payment not found", nil)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("payment service returned status: %d", resp.StatusCode)
+		return nil, HandleHTTPError(resp)
 	}
 
 	var paymentResp PaymentResponse
 	if err := json.NewDecoder(resp.Body).Decode(&paymentResp); err != nil {
-		return nil, fmt.Errorf("failed to decode payment response: %w", err)
+		return nil, apperror.Internal("failed to decode payment response", err)
 	}
 
 	return &paymentResp, nil

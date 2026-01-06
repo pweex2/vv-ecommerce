@@ -9,6 +9,7 @@ import (
 	"order-service/internal/repository"
 	"order-service/internal/router"
 	"order-service/internal/service"
+	"vv-ecommerce/pkg/async"
 	"vv-ecommerce/pkg/clients"
 	"vv-ecommerce/pkg/database"
 
@@ -42,7 +43,17 @@ func main() {
 	// Initialize repository, service, and handler
 	tm := database.NewTransactionManager(db)
 	var orderRepo repository.OrderRepository = repository.NewOrderRepository(db)
-	orderService := service.NewOrderService(orderRepo, clients.NewInventoryClient(cfg.InventoryServiceURL), clients.NewPaymentClient(cfg.PaymentServiceURL), tm)
+	
+	inventoryClient := clients.NewInventoryClient(cfg.InventoryServiceURL)
+	paymentClient := clients.NewPaymentClient(cfg.PaymentServiceURL)
+
+	// Async Compensation Setup
+	mq := async.NewMemoryQueue()
+	compensator := service.NewInventoryCompensator(inventoryClient, mq)
+	// Start background worker
+	compensator.StartWorker()
+
+	orderService := service.NewOrderService(orderRepo, inventoryClient, paymentClient, compensator, tm)
 	orderHandler := handler.NewOrderHandler(orderService)
 
 	// Routes

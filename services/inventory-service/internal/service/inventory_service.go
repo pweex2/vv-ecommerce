@@ -5,14 +5,11 @@ import (
 	"errors"
 	"inventory-service/internal/model"
 	"inventory-service/internal/repository"
+	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/database"
 
 	"gorm.io/gorm"
 )
-
-var ErrInsufficientStock = errors.New("insufficient stock")
-var ErrInventoryNotFound = errors.New("inventory not found")
-var ErrDuplicateRequestID = errors.New("duplicate request ID")
 
 type InventoryService struct {
 	repo repository.InventoryRepository
@@ -31,9 +28,9 @@ func (s *InventoryService) GetInventoryBySKU(ctx context.Context, sku string) (*
 	inventory, err := s.repo.GetInventoryBySKU(ctx, sku)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrInventoryNotFound // 返回更具体的错误
+			return nil, apperror.NotFound("inventory not found", err)
 		}
-		return nil, err
+		return nil, apperror.Internal("database error", err)
 	}
 	return inventory, nil
 }
@@ -42,11 +39,11 @@ func (s *InventoryService) CreateInventory(ctx context.Context, sku string, prod
 	inventory, err := s.repo.GetInventoryBySKU(ctx, sku)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
+			return apperror.Internal("database error", err)
 		}
 	}
 	if inventory != nil {
-		return errors.New("inventory already exists")
+		return apperror.Conflict("inventory already exists", nil)
 	}
 
 	newInventory := &model.Inventory{
@@ -54,18 +51,20 @@ func (s *InventoryService) CreateInventory(ctx context.Context, sku string, prod
 		SKU:       sku,
 		Quantity:  quantity,
 	}
-	return s.repo.CreateInventory(ctx, newInventory)
-
+	if err := s.repo.CreateInventory(ctx, newInventory); err != nil {
+		return apperror.Internal("failed to create inventory", err)
+	}
+	return nil
 }
 
 func (s *InventoryService) DecreaseInventory(ctx context.Context, reqID, sku, orderID, traceID string, quantity int) error {
 	// 检查是否存在重复请求
 	if err := s.repo.RequestLogExists(ctx, reqID); err == nil {
-		return ErrDuplicateRequestID
+		return apperror.Conflict("duplicate request ID", nil)
 	}
 
 	if quantity <= 0 {
-		return errors.New("quantity must be positive for decrease operation")
+		return apperror.InvalidInput("quantity must be positive for decrease operation", nil)
 	}
 
 	// 准备日志
@@ -93,32 +92,40 @@ func (s *InventoryService) DecreaseInventory(ctx context.Context, reqID, sku, or
 
 	if err != nil {
 		if err.Error() == "insufficient stock" {
-			return ErrInsufficientStock
+			return apperror.Conflict("insufficient stock", err)
 		}
 		if err.Error() == "inventory not found" {
-			return ErrInventoryNotFound
+			return apperror.NotFound("inventory not found", err)
 		}
-		return err
+		return apperror.Internal("transaction failed", err)
 	}
-
 	return nil
 }
 
 func (s *InventoryService) IncreaseInventory(ctx context.Context, sku string, quantity int) error {
 	if quantity <= 0 {
-		return errors.New("quantity must be positive")
+		return apperror.InvalidInput("quantity must be positive", nil)
 	}
-	return s.repo.IncreaseInventory(ctx, sku, quantity)
+	if err := s.repo.IncreaseInventory(ctx, sku, quantity); err != nil {
+		return apperror.Internal("failed to increase inventory", err)
+	}
+	return nil
 }
 
 func (s *InventoryService) UpdateInventory(ctx context.Context, sku string, quantity int) error {
 	if quantity < 0 {
-		return errors.New("quantity cannot be negative")
+		return apperror.InvalidInput("quantity cannot be negative", nil)
 	}
 	inventory, err := s.repo.GetInventoryBySKU(ctx, sku)
 	if err != nil {
-		return err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperror.NotFound("inventory not found", err)
+		}
+		return apperror.Internal("database error", err)
 	}
 	inventory.Quantity = quantity
-	return s.repo.UpdateInventory(ctx, inventory)
+	if err := s.repo.UpdateInventory(ctx, inventory); err != nil {
+		return apperror.Internal("failed to update inventory", err)
+	}
+	return nil
 }

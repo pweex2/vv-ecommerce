@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"net/http"
 	"strconv"
 
 	"inventory-service/internal/service"
+	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
 
 	"github.com/gin-gonic/gin"
@@ -24,19 +24,19 @@ func NewInventoryHandler(service *service.InventoryService) *InventoryHandler {
 func (h *InventoryHandler) GetInventoriesByProductID(c *gin.Context) {
 	productIDStr := c.Query("product_id")
 	if productIDStr == "" {
-		response.Error(c, http.StatusBadRequest, "product_id is required")
+		response.Error(c, apperror.InvalidInput("product_id is required", nil))
 		return
 	}
 
 	productID, err := strconv.Atoi(productIDStr)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid product_id")
+		response.Error(c, apperror.InvalidInput("invalid product_id", err))
 		return
 	}
 
 	inventories, err := h.service.GetInventoriesByProductID(c.Request.Context(), uint(productID))
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -46,13 +46,13 @@ func (h *InventoryHandler) GetInventoriesByProductID(c *gin.Context) {
 func (h *InventoryHandler) GetInventoryBySKU(c *gin.Context) {
 	sku := c.Query("sku")
 	if sku == "" {
-		response.Error(c, http.StatusBadRequest, "sku is required")
+		response.Error(c, apperror.InvalidInput("sku is required", nil))
 		return
 	}
 
 	inventory, err := h.service.GetInventoryBySKU(c.Request.Context(), sku)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
@@ -79,7 +79,7 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 
 	// 修正参数顺序：reqID, sku, orderID, traceID, quantity
 	if err := h.service.DecreaseInventory(c.Request.Context(), req.RequestID, req.SKU, req.OrderID, req.TraceID, req.Quantity); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -93,12 +93,12 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
 	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -113,12 +113,12 @@ func (h *InventoryHandler) CreateInventory(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
 	if err := h.service.CreateInventory(c.Request.Context(), req.SKU, req.ProductID, req.Quantity); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -132,12 +132,12 @@ func (h *InventoryHandler) UpdateInventory(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
 	if err := h.service.UpdateInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 

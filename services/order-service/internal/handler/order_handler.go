@@ -2,9 +2,9 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
 	"order-service/internal/model"
 	"order-service/internal/service"
+	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
 
 	"github.com/gin-gonic/gin"
@@ -28,13 +28,13 @@ func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
 	order, err := h.service.CreateOrder(c.Request.Context(), input.UserID, input.TotalAmount, input.SKU)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -44,17 +44,17 @@ func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 func (h *OrderHandler) GetOrderHandler(c *gin.Context) {
 	orderID := c.Query("order_id")
 	if orderID == "" {
-		response.Error(c, http.StatusBadRequest, "Missing order_id")
+		response.Error(c, apperror.InvalidInput("Missing order_id", nil))
 		return
 	}
 
 	order, err := h.service.GetOrder(c.Request.Context(), orderID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 	if order == nil {
-		response.Error(c, http.StatusNotFound, "Order not found")
+		response.Error(c, apperror.NotFound("Order not found", nil))
 		return
 	}
 
@@ -68,18 +68,18 @@ func (h *OrderHandler) UpdateOrderStatusHandler(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
 		return
 	}
 
 	rowsAffected, err := h.service.UpdateOrderStatus(c.Request.Context(), input.OrderID, input.Status)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
 	if rowsAffected == 0 {
-		response.Error(c, http.StatusBadRequest, "No update needed or order not found")
+		response.Error(c, apperror.NotFound("No update needed or order not found", nil))
 		return
 	}
 

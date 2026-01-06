@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"net/http"
 	"payment-service/internal/service"
+	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
 
 	"github.com/gin-gonic/gin"
@@ -26,13 +26,13 @@ type ProcessPaymentRequest struct {
 func (h *PaymentHandler) ProcessPaymentHandler(c *gin.Context) {
 	var req ProcessPaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body or validation failed")
+		response.Error(c, apperror.InvalidInput("Invalid request body or validation failed", err))
 		return
 	}
 
 	payment, err := h.service.ProcessPayment(req.OrderID, req.Amount)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -42,13 +42,13 @@ func (h *PaymentHandler) ProcessPaymentHandler(c *gin.Context) {
 func (h *PaymentHandler) GetPaymentHandler(c *gin.Context) {
 	orderID := c.Query("order_id")
 	if orderID == "" {
-		response.Error(c, http.StatusBadRequest, "Missing order_id")
+		response.Error(c, apperror.InvalidInput("Missing order_id", nil))
 		return
 	}
 
 	payment, err := h.service.GetPayment(orderID)
 	if err != nil {
-		response.Error(c, http.StatusNotFound, "Payment not found")
+		response.Error(c, apperror.NotFound("Payment not found", err))
 		return
 	}
 
