@@ -32,7 +32,7 @@ func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.CreateOrder(input.UserID, input.TotalAmount, input.SKU)
+	order, err := h.service.CreateOrder(c.Request.Context(), input.UserID, input.TotalAmount, input.SKU)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -48,7 +48,7 @@ func (h *OrderHandler) GetOrderHandler(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.GetOrder(orderID)
+	order, err := h.service.GetOrder(c.Request.Context(), orderID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -72,7 +72,7 @@ func (h *OrderHandler) UpdateOrderStatusHandler(c *gin.Context) {
 		return
 	}
 
-	rowsAffected, err := h.service.UpdateOrderStatus(input.OrderID, input.Status)
+	rowsAffected, err := h.service.UpdateOrderStatus(c.Request.Context(), input.OrderID, input.Status)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

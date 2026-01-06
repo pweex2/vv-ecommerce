@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"order-service/internal/model"
 	"order-service/internal/repository"
 	"time"
 	"vv-ecommerce/pkg/clients"
+	"vv-ecommerce/pkg/database"
 
 	"github.com/google/uuid"
 )
@@ -14,13 +16,14 @@ type OrderService struct {
 	repo            repository.OrderRepository
 	inventoryClient *clients.InventoryClient
 	paymentClient   *clients.PaymentClient
+	tm              database.TransactionManager
 }
 
-func NewOrderService(repo repository.OrderRepository, inventoryClient *clients.InventoryClient, paymentClient *clients.PaymentClient) *OrderService {
-	return &OrderService{repo: repo, inventoryClient: inventoryClient, paymentClient: paymentClient}
+func NewOrderService(repo repository.OrderRepository, inventoryClient *clients.InventoryClient, paymentClient *clients.PaymentClient, tm database.TransactionManager) *OrderService {
+	return &OrderService{repo: repo, inventoryClient: inventoryClient, paymentClient: paymentClient, tm: tm}
 }
 
-func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) (*model.Order, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmount int64, sku string) (*model.Order, error) {
 	orderID := uuid.New().String()
 	traceID := uuid.New().String()
 	reqID := uuid.New().String()
@@ -34,7 +37,7 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 		TraceID:     traceID,
 	}
 
-	err = s.repo.CreateOrder(order)
+	err = s.repo.CreateOrder(ctx, order)
 	if err != nil {
 		return nil, err
 	}
@@ -49,10 +52,10 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 		time.Sleep(100 * time.Millisecond)
 	}
 	if err != nil {
-		s.repo.UpdateOrderStatus(orderID, model.OrderStatusFailed)
+		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
 		return nil, err
 	}
-	s.repo.UpdateOrderStatus(orderID, model.OrderStatusInventoryReserved)
+	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusInventoryReserved)
 
 	// 调用支付服务创建支付订单
 	paymentResp, err := s.paymentClient.ProcessPayment(orderID, totalAmount)
@@ -65,7 +68,7 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 			// In a real system, alert on call
 		}
 
-		s.repo.UpdateOrderStatus(orderID, model.OrderStatusFailed)
+		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
 		return nil, err
 	}
 
@@ -75,21 +78,21 @@ func (s *OrderService) CreateOrder(userID int64, totalAmount int64, sku string) 
 			// Log critical error
 		}
 
-		s.repo.UpdateOrderStatus(orderID, model.OrderStatusFailed)
+		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
 		return nil, errors.New("payment failed with status: " + paymentResp.Status)
 	}
 
-	s.repo.UpdateOrderStatus(orderID, model.OrderStatusPaid)
+	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusPaid)
 
-	s.repo.UpdateOrderStatus(orderID, model.OrderStatusCompleted)
+	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusCompleted)
 
 	return order, nil
 }
 
-func (s *OrderService) GetOrder(orderID string) (*model.Order, error) {
-	return s.repo.GetOrderByID(orderID)
+func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*model.Order, error) {
+	return s.repo.GetOrderByID(ctx, orderID)
 }
 
-func (s *OrderService) UpdateOrderStatus(orderID string, status model.OrderStatus) (int64, error) {
-	return s.repo.UpdateOrderStatus(orderID, status)
+func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, status model.OrderStatus) (int64, error) {
+	return s.repo.UpdateOrderStatus(ctx, orderID, status)
 }

@@ -10,6 +10,7 @@ import (
 	"order-service/internal/router"
 	"order-service/internal/service"
 	"vv-ecommerce/pkg/clients"
+	"vv-ecommerce/pkg/database"
 
 	"gorm.io/driver/mysql" // GORM MySQL 驱动
 	"gorm.io/gorm"         // GORM 核心库
@@ -39,8 +40,9 @@ func main() {
 	// db.AutoMigrate(&model.Order{})
 
 	// Initialize repository, service, and handler
+	tm := database.NewTransactionManager(db)
 	var orderRepo repository.OrderRepository = repository.NewOrderRepository(db)
-	orderService := service.NewOrderService(orderRepo, clients.NewInventoryClient(cfg.InventoryServiceURL), clients.NewPaymentClient(cfg.PaymentServiceURL))
+	orderService := service.NewOrderService(orderRepo, clients.NewInventoryClient(cfg.InventoryServiceURL), clients.NewPaymentClient(cfg.PaymentServiceURL), tm)
 	orderHandler := handler.NewOrderHandler(orderService)
 
 	// Routes
