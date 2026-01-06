@@ -26,6 +26,26 @@ This project handles different environments (Local vs. Production) using **Envir
 > **Why `host.docker.internal`?**
 > In local development, services running in Docker containers need to access resources (MySQL, Redis) running on the Windows host machine (your `local-infra`). `host.docker.internal` acts as a bridge. In production, services communicate directly via internal DNS.
 
+## 🔄 Distributed Transaction & Consistency
+
+This project implements the **Saga Pattern (Orchestration-based)** to ensure data consistency across microservices without using Two-Phase Commit (2PC).
+
+### The "Order Creation" Saga
+1. **Order Service**: Creates an order with status `CREATED`.
+2. **Inventory Service**: Synchronously decreases stock.
+   - **Smart Retry**: Uses `AppError` to distinguish between transient errors (e.g., Timeout -> Retry) and permanent errors (e.g., Invalid SKU -> Fail).
+3. **Payment Service**: Synchronously processes payment.
+4. **Compensation (Rollback)**:
+   - If Payment fails, the Order Service initiates a **Compensating Transaction** to rollback the inventory.
+   - **Async Reliability**: If the synchronous rollback fails (e.g., Inventory Service is down), the rollback task is pushed to an **in-memory queue** (simulating RabbitMQ/Kafka) for eventual execution by a background worker.
+
+## 🛡️ Standardized Error Handling
+
+- **AppError**: A unified error struct used across all services and clients.
+  - **Type-Safe**: Distinguishes between `InvalidInput`, `NotFound`, `ServiceUnavailable`, etc.
+  - **Retryable Check**: `IsRetryable(err)` helper allows clients to smartly decide whether to retry a failed operation.
+- **Client Utilities**: Shared wrappers (`HandleHTTPError`, `WrapClientError`) ensure that downstream HTTP errors are correctly mapped back to domain `AppError`s, preserving context like `DeadlineExceeded`.
+
 ## 🚀 Services
 
 | Service | Port | Description |
