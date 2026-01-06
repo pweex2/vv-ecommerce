@@ -7,6 +7,7 @@ import (
 	"time"
 	"vv-ecommerce/pkg/clients"
 	"vv-ecommerce/pkg/common/apperror"
+	"vv-ecommerce/pkg/common/constants"
 	"vv-ecommerce/pkg/database"
 
 	"github.com/google/uuid"
@@ -77,7 +78,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 		return nil, apperror.Internal("payment processing failed", err)
 	}
 
-	if paymentResp.Status != "COMPLETED" {
+	if paymentResp.Status != string(constants.PaymentStatusCompleted) {
 		// 支付状态非成功，同样需要回滚
 		s.compensator.Compensate(sku, totalAmount)
 

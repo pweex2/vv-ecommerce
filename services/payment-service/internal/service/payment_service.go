@@ -5,6 +5,7 @@ import (
 	"payment-service/internal/model"
 	"payment-service/internal/repository"
 	"time"
+	"vv-ecommerce/pkg/common/constants"
 
 	"github.com/google/uuid"
 )
@@ -22,7 +23,7 @@ func (s *PaymentService) ProcessPayment(orderID string, amount int64) (*model.Pa
 	payment := &model.Payment{
 		OrderID: orderID,
 		Amount:  amount,
-		Status:  "PENDING",
+		Status:  string(constants.PaymentStatusPending),
 	}
 	if err := s.repo.CreatePayment(payment); err != nil {
 		return nil, err
@@ -40,15 +41,15 @@ func (s *PaymentService) ProcessPayment(orderID string, amount int64) (*model.Pa
 	var err error
 
 	if amount < 0 {
-		newStatus = "FAILED"
+		newStatus = string(constants.PaymentStatusFailed)
 		err = errors.New("invalid amount")
 	} else {
 		// 模拟 10% 的失败率 (可选，用于测试容错)
 		// if rand.Intn(10) == 0 {
-		// 	newStatus = "FAILED"
+		// 	newStatus = string(constants.PaymentStatusFailed)
 		// 	err = errors.New("payment gateway rejected")
 		// } else {
-		newStatus = "COMPLETED"
+		newStatus = string(constants.PaymentStatusCompleted)
 		transactionID = uuid.New().String()
 		// }
 	}
