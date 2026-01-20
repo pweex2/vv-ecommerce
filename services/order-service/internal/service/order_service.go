@@ -10,8 +10,19 @@ import (
 	"vv-ecommerce/pkg/common/constants"
 	"vv-ecommerce/pkg/database"
 
+	"encoding/json"
+
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 )
+
+func mustMarshal(v interface{}) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
 
 type OrderService struct {
 	repo            repository.OrderRepository
@@ -70,20 +81,49 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 
 	// 调用支付服务创建支付订单
 	paymentResp, err := s.paymentClient.ProcessPayment(ctx, orderID, totalAmount, traceID)
-	if err != nil {
-		// 支付失败，发起库存回滚 (Compensating Transaction)
-		s.compensator.Compensate(sku, totalAmount, traceID)
 
-		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
-		return nil, apperror.Internal("payment processing failed", err)
+	// 定义统一的补偿逻辑
+	handlePaymentFailure := func(cause error) error {
+		// 在一个事务中更新订单状态为失败并记录 Outbox 事件
+		txErr := s.tm.Transaction(ctx, func(txCtx context.Context) error {
+			if _, err := s.repo.UpdateOrderStatus(txCtx, orderID, model.OrderStatusFailed); err != nil {
+				return err
+			}
+
+			payload := map[string]interface{}{
+				"sku":      sku,
+				"quantity": totalAmount,
+				"trace_id": traceID,
+			}
+			outboxEvent := &model.OutboxEvent{
+				AggregateType: "Order",
+				AggregateID:   orderID,
+				EventType:     "InventoryRollback",
+				Payload:       datatypes.JSON(mustMarshal(payload)), // 辅助函数处理 JSON 序列化
+				Status:        model.OutboxStatusPending,
+				TraceID:       traceID,
+			}
+
+			return s.repo.SaveOutboxEvent(txCtx, outboxEvent)
+		})
+
+		if txErr != nil {
+			// 如果事务提交失败，我们确实处于一个糟糕的状态。
+			// 但由于我们还没发 MQ，也没有双写问题。只是 DB 状态更新失败。
+			// 日志记录这个严重错误
+			// logger.Error("Critical: Failed to save compensation event", txErr)
+			return apperror.Internal("payment failed and compensation persistence failed", txErr)
+		}
+
+		return cause
+	}
+
+	if err != nil {
+		return nil, handlePaymentFailure(apperror.Internal("payment processing failed", err))
 	}
 
 	if paymentResp.Status != string(constants.PaymentStatusCompleted) {
-		// 支付状态非成功，同样需要回滚
-		s.compensator.Compensate(sku, totalAmount, traceID)
-
-		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
-		return nil, apperror.Conflict("payment failed with status: "+paymentResp.Status, nil)
+		return nil, handlePaymentFailure(apperror.Conflict("payment failed with status: "+paymentResp.Status, nil))
 	}
 
 	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusPaid)

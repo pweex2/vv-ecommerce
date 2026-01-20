@@ -5,24 +5,25 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 	"order-service/internal/config"
 	"order-service/internal/handler"
 	"order-service/internal/repository"
 	"order-service/internal/router"
 	"order-service/internal/service"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 	"vv-ecommerce/pkg/async"
 	"vv-ecommerce/pkg/clients"
 	"vv-ecommerce/pkg/database"
 )
 
 type App struct {
-	Cfg         *config.Config
-	Router      http.Handler
-	Compensator *service.InventoryCompensator
+	Cfg             *config.Config
+	Router          http.Handler
+	Compensator     *service.InventoryCompensator
+	OutboxProcessor *service.OutboxProcessor
 }
 
 func New(cfg *config.Config) (*App, func(), error) {
@@ -59,6 +60,7 @@ func New(cfg *config.Config) (*App, func(), error) {
 	tm := database.NewTransactionManager(db)
 	orderRepo := repository.NewOrderRepository(db)
 	compensator := service.NewInventoryCompensator(inventoryClient, messageQueue)
+	outboxProcessor := service.NewOutboxProcessor(orderRepo, messageQueue)
 	orderService := service.NewOrderService(orderRepo, inventoryClient, paymentClient, compensator, tm)
 	orderHandler := handler.NewOrderHandler(orderService)
 
@@ -70,21 +72,24 @@ func New(cfg *config.Config) (*App, func(), error) {
 	// Cleanup function
 	cleanup := func() {
 		log.Println("Cleaning up application resources...")
+		outboxProcessor.Stop() // Stop outbox processor
 		if err := messageQueue.Close(); err != nil {
 			log.Printf("Error closing message queue: %v", err)
 		}
 	}
 
 	return &App{
-		Cfg:         cfg,
-		Router:      r,
-		Compensator: compensator,
+		Cfg:             cfg,
+		Router:          r,
+		Compensator:     compensator,
+		OutboxProcessor: outboxProcessor,
 	}, cleanup, nil
 }
 
 func (a *App) Run() error {
 	// Start background workers
 	a.Compensator.StartWorker()
+	a.OutboxProcessor.Start()
 
 	addr := fmt.Sprintf(":%d", a.Cfg.ServerPort)
 	srv := &http.Server{
