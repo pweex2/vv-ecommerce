@@ -2,6 +2,7 @@ package clients
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -36,18 +37,23 @@ type PaymentResponse struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-func (c *PaymentClient) ProcessPayment(orderID string, amount int64) (*PaymentResponse, error) {
+func (c *PaymentClient) ProcessPayment(ctx context.Context, orderID string, amount int64, traceID string) (*PaymentResponse, error) {
 	reqBody := PaymentRequest{
 		OrderID: orderID,
 		Amount:  amount,
 	}
 	body, _ := json.Marshal(reqBody)
 
-	resp, err := c.client.Post(
-		c.baseURL+"/payments",
-		"application/json",
-		bytes.NewBuffer(body),
-	)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, WrapClientError(err, "failed to create request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if traceID != "" {
+		req.Header.Set("X-Trace-ID", traceID)
+	}
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, WrapClientError(err, "failed to call payment service")
 	}

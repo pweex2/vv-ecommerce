@@ -69,10 +69,10 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusInventoryReserved)
 
 	// 调用支付服务创建支付订单
-	paymentResp, err := s.paymentClient.ProcessPayment(orderID, totalAmount)
+	paymentResp, err := s.paymentClient.ProcessPayment(ctx, orderID, totalAmount, traceID)
 	if err != nil {
 		// 支付失败，发起库存回滚 (Compensating Transaction)
-		s.compensator.Compensate(sku, totalAmount)
+		s.compensator.Compensate(sku, totalAmount, traceID)
 
 		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
 		return nil, apperror.Internal("payment processing failed", err)
@@ -80,7 +80,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 
 	if paymentResp.Status != string(constants.PaymentStatusCompleted) {
 		// 支付状态非成功，同样需要回滚
-		s.compensator.Compensate(sku, totalAmount)
+		s.compensator.Compensate(sku, totalAmount, traceID)
 
 		s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusFailed)
 		return nil, apperror.Conflict("payment failed with status: "+paymentResp.Status, nil)

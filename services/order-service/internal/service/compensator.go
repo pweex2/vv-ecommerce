@@ -10,6 +10,7 @@ import (
 type RollbackMessage struct {
 	SKU      string `json:"sku"`
 	Quantity int64  `json:"quantity"`
+	TraceID  string `json:"trace_id"`
 }
 
 type InventoryCompensator struct {
@@ -27,9 +28,9 @@ func NewInventoryCompensator(client *clients.InventoryClient, mq async.MessageQu
 }
 
 // Compensate tries to rollback synchronously. If it fails, it pushes the task to MQ.
-func (c *InventoryCompensator) Compensate(sku string, quantity int64) {
+func (c *InventoryCompensator) Compensate(sku string, quantity int64, traceID string) {
 	// 1. Try synchronous rollback
-	err := c.client.Increase(sku, quantity)
+	err := c.client.Increase(sku, quantity, traceID)
 	if err == nil {
 		return
 	}
@@ -40,6 +41,7 @@ func (c *InventoryCompensator) Compensate(sku string, quantity int64) {
 	msg := RollbackMessage{
 		SKU:      sku,
 		Quantity: quantity,
+		TraceID:  traceID,
 	}
 	payload, _ := json.Marshal(msg) // Ignore marshal error for struct
 	if err := c.mq.Publish(c.topic, payload); err != nil {
@@ -57,7 +59,7 @@ func (c *InventoryCompensator) StartWorker() error {
 			return err // Unrecoverable format error, maybe should not retry?
 		}
 
-		fmt.Printf("Processing async rollback for SKU %s, Qty %d\n", msg.SKU, msg.Quantity)
-		return c.client.Increase(msg.SKU, msg.Quantity)
+		fmt.Printf("Processing async rollback for SKU %s, Qty %d, TraceID %s\n", msg.SKU, msg.Quantity, msg.TraceID)
+		return c.client.Increase(msg.SKU, msg.Quantity, msg.TraceID)
 	})
 }

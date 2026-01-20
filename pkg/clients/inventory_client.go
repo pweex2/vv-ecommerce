@@ -32,10 +32,11 @@ func (c *InventoryClient) HealthCheck() error {
 	return nil
 }
 
-func (c *InventoryClient) Increase(sku string, qty int64) error {
+func (c *InventoryClient) Increase(sku string, qty int64, traceID string) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"sku":      sku,
 		"quantity": qty,
+		"trace_id": traceID,
 	})
 
 	resp, err := c.client.Post(
