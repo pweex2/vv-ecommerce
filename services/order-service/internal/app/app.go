@@ -1,9 +1,14 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 	"order-service/internal/config"
 	"order-service/internal/handler"
 	"order-service/internal/repository"
@@ -82,6 +87,45 @@ func (a *App) Run() error {
 	a.Compensator.StartWorker()
 
 	addr := fmt.Sprintf(":%d", a.Cfg.ServerPort)
-	log.Printf("Order Service running on port %d", a.Cfg.ServerPort)
-	return http.ListenAndServe(addr, a.Router)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: a.Router,
+	}
+
+	// Channel to listen for errors coming from the listener.
+	serverErrors := make(chan error, 1)
+
+	// Start the server in a goroutine
+	go func() {
+		log.Printf("Order Service running on port %d", a.Cfg.ServerPort)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrors <- err
+		}
+	}()
+
+	// Channel to listen for interrupt or terminate signals
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	// Blocking select
+	select {
+	case err := <-serverErrors:
+		return fmt.Errorf("server error: %w", err)
+
+	case sig := <-shutdown:
+		log.Printf("Start shutdown: signal %v", sig)
+
+		// Create a context with a timeout for the shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Ask the server to shut down gracefully
+		if err := srv.Shutdown(ctx); err != nil {
+			// Force close if graceful shutdown fails
+			srv.Close()
+			return fmt.Errorf("could not stop server gracefully: %w", err)
+		}
+	}
+
+	return nil
 }
