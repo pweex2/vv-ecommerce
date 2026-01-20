@@ -102,10 +102,13 @@ func (s *InventoryService) DecreaseInventory(ctx context.Context, reqID, sku, or
 	return nil
 }
 
-func (s *InventoryService) IncreaseInventory(ctx context.Context, sku string, quantity int) error {
+func (s *InventoryService) IncreaseInventory(ctx context.Context, sku string, quantity int, traceID string) error {
 	if quantity <= 0 {
 		return apperror.InvalidInput("quantity must be positive", nil)
 	}
+	// TODO: Log traceID for rollback tracking if needed
+	// log.Printf("IncreaseInventory (Rollback?) - SKU: %s, Qty: %d, TraceID: %s", sku, quantity, traceID)
+
 	if err := s.repo.IncreaseInventory(ctx, sku, quantity); err != nil {
 		return apperror.Internal("failed to increase inventory", err)
 	}

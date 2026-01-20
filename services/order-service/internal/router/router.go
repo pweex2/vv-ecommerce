@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"net/http"
 	"order-service/internal/handler"
+	"vv-ecommerce/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
 func NewRouter(h *handler.OrderHandler) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.TraceID())
+	r.Use(middleware.Logger())
+	r.Use(middleware.Recovery())
 
 	// Health Check
 	r.GET("/health", func(c *gin.Context) {

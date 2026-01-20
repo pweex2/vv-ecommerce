@@ -6,6 +6,7 @@ import (
 	"inventory-service/internal/service"
 	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
+	"vv-ecommerce/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -77,6 +78,10 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 		req.RequestID = uuid.New().String()
 	}
 
+	if req.TraceID == "" {
+		req.TraceID = middleware.GetTraceID(c)
+	}
+
 	// 修正参数顺序：reqID, sku, orderID, traceID, quantity
 	if err := h.service.DecreaseInventory(c.Request.Context(), req.RequestID, req.SKU, req.OrderID, req.TraceID, req.Quantity); err != nil {
 		response.Error(c, err)
@@ -90,6 +95,7 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 	var req struct {
 		SKU      string `json:"sku" binding:"required"`
 		Quantity int    `json:"quantity" binding:"required,gt=0"`
+		TraceID  string `json:"trace_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -97,7 +103,11 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
+	if req.TraceID == "" {
+		req.TraceID = middleware.GetTraceID(c)
+	}
+
+	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity, req.TraceID); err != nil {
 		response.Error(c, err)
 		return
 	}
