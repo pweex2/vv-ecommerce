@@ -1,6 +1,23 @@
 version: "3.9"
 
 services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVER_PORT=8000
+      - ORDER_SERVICE_URL=http://order-service:${ORDER_PORT}
+      - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_PORT}
+      - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_PORT}
+    depends_on:
+      - order-service
+      - inventory-service
+      - payment-service
+
   order-service:
     build:
       context: .
