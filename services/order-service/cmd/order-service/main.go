@@ -1,65 +1,27 @@
 package main
 
 import (
-	"fmt" // 导入 fmt 包用于字符串格式化
 	"log"
-	"net/http"
+	"order-service/internal/app"
 	"order-service/internal/config"
-	"order-service/internal/handler"
-	"order-service/internal/repository"
-	"order-service/internal/router"
-	"order-service/internal/service"
-	"vv-ecommerce/pkg/async"
-	"vv-ecommerce/pkg/clients"
-	"vv-ecommerce/pkg/database"
-
-	"gorm.io/driver/mysql" // GORM MySQL 驱动
-	"gorm.io/gorm"         // GORM 核心库
 )
 
 func main() {
-	// Load configuration
+	// 1. Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Database connection using GORM
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.DBName,
-	)
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	// 2. Initialize Application
+	application, cleanup, err := app.New(cfg)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to initialize application: %v", err)
 	}
+	defer cleanup()
 
-	// TODO: AutoMigrate models if needed
-	// db.AutoMigrate(&model.Order{})
-
-	// Initialize repository, service, and handler
-	tm := database.NewTransactionManager(db)
-	var orderRepo repository.OrderRepository = repository.NewOrderRepository(db)
-	
-	inventoryClient := clients.NewInventoryClient(cfg.InventoryServiceURL)
-	paymentClient := clients.NewPaymentClient(cfg.PaymentServiceURL)
-
-	// Async Compensation Setup
-	mq := async.NewMemoryQueue()
-	compensator := service.NewInventoryCompensator(inventoryClient, mq)
-	// Start background worker
-	compensator.StartWorker()
-
-	orderService := service.NewOrderService(orderRepo, inventoryClient, paymentClient, compensator, tm)
-	orderHandler := handler.NewOrderHandler(orderService)
-
-	// Routes
-	r := router.NewRouter(orderHandler)
-
-	serverAddr := fmt.Sprintf(":%d", cfg.ServerPort)
-	log.Printf("Order Service running on %s", serverAddr)
-	log.Fatal(http.ListenAndServe(serverAddr, r))
+	// 3. Run Application
+	if err := application.Run(); err != nil {
+		log.Fatalf("Application failed to run: %v", err)
+	}
 }

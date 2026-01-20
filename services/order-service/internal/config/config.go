@@ -27,8 +27,10 @@ type RedisConfig struct {
 
 // MQConfig 消息队列配置 (占位符)
 type MQConfig struct {
-	Host string `mapstructure:"Host"`
-	Port string `mapstructure:"Port"`
+	Host     string `mapstructure:"Host"`
+	Port     string `mapstructure:"Port"`
+	User     string `mapstructure:"User"`
+	Password string `mapstructure:"Password"`
 }
 
 // Config 应用程序配置
@@ -71,6 +73,11 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("Database.User", "root")
 	viper.SetDefault("Database.Password", "root")
 	viper.SetDefault("Database.DBName", "order_db")
+
+	viper.SetDefault("MQ.Host", "localhost")
+	viper.SetDefault("MQ.Port", "5672")
+	viper.SetDefault("MQ.User", "guest")
+	viper.SetDefault("MQ.Password", "guest")
 
 	// Allow environment variables to override config, replacing . with _ (e.g. Database.Port -> DATABASE_PORT)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

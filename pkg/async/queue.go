@@ -14,6 +14,9 @@ type MessageQueue interface {
 	Close() error
 }
 
+// Ensure MemoryQueue implements MessageQueue interface at compile time
+var _ MessageQueue = (*MemoryQueue)(nil)
+
 // MemoryQueue is a simple in-memory implementation of MessageQueue using channels
 type MemoryQueue struct {
 	topics map[string]chan []byte
