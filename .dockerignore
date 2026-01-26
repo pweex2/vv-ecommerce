@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose.yml
+.dockerignore
+
+# IDEs
+.vscode
+.idea
+*.code-workspace
+
+# Build output
+bin/
+dist/
+build/
+*.exe
+*.test
+*.out
+
+# Go dependencies
+vendor/
+
+# Environment variables (Critical!)
+.env
+.env.*
+
+# Local Infrastructure Data (if in project root)
+mysql-data/
+redis-data/
+rabbitmq-data/
