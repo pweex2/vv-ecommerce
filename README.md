@@ -2,87 +2,109 @@
 
 A lightweight, microservices-based e-commerce backend system built with **Go** and the **Gin** framework.
 
+## 🐳 Quick Start (Docker) - Recommended
+
+The easiest way to run the project is using Docker Compose. This ensures all services (MySQL, Redis, RabbitMQ, and Microservices) are wired up correctly and handles cross-platform compatibility (Windows/Mac/Linux).
+
+### 1. Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
+
+### 2. Configuration
+Copy the example environment file to create your local configuration:
+
+```bash
+# Mac/Linux
+cp .env.example .env
+
+# Windows (PowerShell)
+copy .env.example .env
+```
+
+(Optional) Edit `.env` if you need to change ports or credentials. The defaults are usually fine.
+
+### 3. Run
+Start the entire system with one command:
+
+```bash
+docker-compose up --build
+```
+
+### 4. Access
+| Service | URL / Port | Description |
+| :--- | :--- | :--- |
+| **API Gateway** | `http://localhost:8000` | **Main Entry Point**. All API requests go here. |
+| **MySQL** | `localhost:3306` | Database (User: `root`, Pass: `root`) |
+| **RabbitMQ UI** | `http://localhost:15672` | Message Queue Dashboard (User: `guest`, Pass: `guest`) |
+| **Redis** | `localhost:6379` | Cache |
+
+---
+
 ## 🏗 Architecture
 
-This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`). It consists of three decoupled microservices that communicate via HTTP.
+This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`). It consists of three decoupled microservices that communicate via HTTP and an API Gateway.
 
 ### Tech Stack
 - **Language**: Go 1.25+
-- **Web Framework**: [Gin](https://github.com/gin-gonic/gin) (High-performance HTTP web framework)
+- **Web Framework**: [Gin](https://github.com/gin-gonic/gin)
 - **Database**: MySQL (accessed via [GORM](https://gorm.io/))
-- **Configuration**: Viper
-- **Architecture**: Microservices, RESTful API
+- **Messaging**: RabbitMQ (Event-Driven Architecture)
+- **Caching**: Redis
+- **Gateway**: Custom Go-based Reverse Proxy
 
 ## 🌐 Configuration & Networking
 
-This project handles different environments (Local vs. Production) using **Environment Variables**. The code remains the same; only the configuration changes.
+This project handles different environments using **Environment Variables** (`.env`).
 
-| Configuration | Local (Docker Compose) | Production (K8s / Cloud) |
+| Configuration | Local (Docker) | Production (K8s / Cloud) |
 | :--- | :--- | :--- |
-| **Database Host** | `host.docker.internal` (Access host's Local-Infra) | `db-prod.cluster-xyz.aws.com` (Cloud RDS / Service DNS) |
-| **Service Discovery** | `http://host.docker.internal:8082` | `http://inventory-service` (K8s Internal DNS) |
-| **API Gateway** | `localhost:8080` | `api.vv-ecommerce.com` (Ingress / Load Balancer) |
-
-> **Why `host.docker.internal`?**
-> In local development, services running in Docker containers need to access resources (MySQL, Redis) running on the Windows host machine (your `local-infra`). `host.docker.internal` acts as a bridge. In production, services communicate directly via internal DNS.
+| **Database Host** | `mysql` (Docker Service Name) | `db-prod.cluster-xyz.aws.com` |
+| **Service Discovery** | `http://inventory-service:8082` | `http://inventory-service` (K8s DNS) |
+| **API Gateway** | `localhost:8000` | `api.vv-ecommerce.com` |
 
 ## 🔄 Distributed Transaction & Consistency
 
-This project implements the **Saga Pattern (Orchestration-based)** to ensure data consistency across microservices without using Two-Phase Commit (2PC).
+This project implements the **Saga Pattern (Orchestration-based)** and **Transactional Outbox Pattern** to ensure data consistency across microservices.
 
 ### The "Order Creation" Saga
-1. **Order Service**: Creates an order with status `CREATED`.
-2. **Inventory Service**: Synchronously decreases stock.
-   - **Smart Retry**: Uses `AppError` to distinguish between transient errors (e.g., Timeout -> Retry) and permanent errors (e.g., Invalid SKU -> Fail).
-3. **Payment Service**: Synchronously processes payment.
-4. **Compensation (Rollback)**:
-   - If Payment fails, the Order Service initiates a **Compensating Transaction** to rollback the inventory.
-   - **Async Reliability**: If the synchronous rollback fails (e.g., Inventory Service is down), the rollback task is pushed to an **in-memory queue** (simulating RabbitMQ/Kafka) for eventual execution by a background worker.
+1. **Order Service**: Creates an order in `PENDING` state and writes an event to the `outbox_events` table (in the same DB transaction).
+2. **Outbox Processor**: Asynchronously reads from `outbox_events` and publishes messages to **RabbitMQ**.
+3. **Inventory Service**: Consumes message, deducts stock.
+4. **Payment Service**: Consumes message, processes payment.
+5. **Compensation**: If any step fails, compensating events are triggered to rollback changes (e.g., restore stock).
 
 ## 🛡️ Standardized Error Handling
 
-- **AppError**: A unified error struct used across all services and clients.
-  - **Type-Safe**: Distinguishes between `InvalidInput`, `NotFound`, `ServiceUnavailable`, etc.
-  - **Retryable Check**: `IsRetryable(err)` helper allows clients to smartly decide whether to retry a failed operation.
-- **Client Utilities**: Shared wrappers (`HandleHTTPError`, `WrapClientError`) ensure that downstream HTTP errors are correctly mapped back to domain `AppError`s, preserving context like `DeadlineExceeded`.
+- **AppError**: A unified error struct used across all services.
+- **Retry Logic**: Smart retry mechanisms for transient errors (e.g., timeouts) vs. permanent errors (e.g., invalid input).
 
-## 🚀 Services
+## 🚀 Services Overview
 
-| Service | Port | Description |
-|---------|------|-------------|
-| **Order Service** | `:8081` | Manages order creation, retrieval, and status updates. Orchestrates calls to Inventory and Payment services. |
-| **Inventory Service** | `:8082` | Manages product stock levels. Handles stock deduction and checking. |
-| **Payment Service** | `:8083` | Handles payment processing and recording. |
+| Service | Internal Port | Description |
+|---------|---------------|-------------|
+| **API Gateway** | `:8000` | Routes requests to internal services. **Publicly Exposed**. |
+| **Order Service** | `:8081` | Manages orders. Orchestrates Sagas. |
+| **Inventory Service** | `:8082` | Manages stock levels. |
+| **Payment Service** | `:8083` | Handles payments. |
 
-## 🛠 Prerequisites
+---
 
-- **Go** (1.22 or higher recommended)
-- **MySQL** (Running on localhost:3306)
+## 🛠 Manual Local Development (Optional)
 
-## 📦 Getting Started
+If you prefer to run services manually (without Docker Compose for apps), ensure you have the infrastructure running:
 
-### 1. Database Setup
-Ensure you have a MySQL instance running. Create the following databases:
-```sql
-CREATE DATABASE order_db;
-CREATE DATABASE inventory_db;
-CREATE DATABASE payment_db;
+### 1. Start Infrastructure
+```bash
+# Only start infra (MySQL, Redis, MQ)
+docker-compose up -d mysql redis rabbitmq
 ```
-*Note: The services are configured to use `root:root` by default. You can modify `configs/config.development.yaml` in each service if your credentials differ.*
 
-### 2. Run the Services
+### 2. Run Services
 You need to start each service in a separate terminal.
 
-#### Start Inventory Service
+#### Start API Gateway
 ```bash
-cd services/inventory-service
-go run ./cmd/inventory-service/main.go
-```
-
-#### Start Payment Service
-```bash
-cd services/payment-service
-go run ./cmd/payment-service/main.go
+cd services/api-gateway
+go run ./cmd/api-gateway/main.go
 ```
 
 #### Start Order Service
@@ -91,59 +113,40 @@ cd services/order-service
 go run ./cmd/order-service/main.go
 ```
 
-## 🔌 API Endpoints
+(Repeat for Inventory and Payment services)
 
-### Order Service (`:8081`)
-- `POST /orders` - Create a new order (requires `user_id`, `sku`, `total_amount`)
-- `GET /orders?order_id={id}` - Get order details
-- `PATCH /orders` - Update order status
+## 🔌 API Endpoints (via Gateway)
 
-### Inventory Service (`:8082`)
-- `GET /inventories?product_id={id}` - List inventories for a product
-- `GET /inventory/sku?sku={sku}` - Get specific inventory details
-- `POST /inventory/decrease` - Decrease stock (Internal use)
-- `POST /inventory/create` - Create initial inventory
+Base URL: `http://localhost:8000`
 
-### Payment Service (`:8083`)
-- `POST /payments` - Process a payment
-- `GET /payments?order_id={id}` - Get payment details
+- `POST /api/v1/orders` - Create a new order
+- `GET /api/v1/orders/:id` - Get order details
+- `POST /api/v1/inventory/deduct` - Deduct stock (Internal/Debug)
 
-## 📂 Project Structure
+---
 
-```
-vv-ecommerce/
-├── pkg/                # Shared packages (Clients, Common Responses)
-├── services/           # Microservices source code
-│   ├── inventory-service/
-│   ├── order-service/
-│   └── payment-service/
-├── go.work             # Go Workspace configuration
-└── README.md
-```
+## 🗺️ Deployment & Production Roadmap
 
-## ☁️ Deployment & Production Roadmap
+### Phase 1: Containerization (Current)
+- [x] Dockerize all services (Multi-stage builds)
+- [x] Docker Compose for local development orchestration
+- [x] Environment variable configuration (.env)
 
-Currently, this project is optimized for local development. To move towards a production-ready state (e.g., Docker, K8s), the following enhancements are planned:
+### Phase 2: Observability & Monitoring
+- [ ] **Distributed Tracing**: Integrate Jaeger/OpenTelemetry to visualize TraceIDs across services.
+- [ ] **Metrics**: Expose Prometheus metrics (`/metrics`) for request latency, error rates, and queue depth.
+- [ ] **Logging**: Centralized logging (ELK Stack or Loki) to aggregate logs from all containers.
 
-- **🐳 Containerization**: Create multi-stage `Dockerfile`s for each service to ensure consistent runtime environments.
-- **☸️ Orchestration**: Deploy using **Kubernetes** (or Docker Compose for dev-prod parity), utilizing `Deployments` and `Services`.
-- **⚙️ Configuration**: Migrate from local YAML files to **Environment Variables** or **K8s ConfigMaps/Secrets** for better security and flexibility.
-- **🔍 Observability**:
-  - **Logging**: Implement structured JSON logging (e.g., Zap/Logrus) for aggregation (ELK/Loki).
-  - **Tracing**: Integrate **OpenTelemetry/Jaeger** to trace requests across microservices.
-  - **Metrics**: Expose Prometheus metrics for monitoring health and performance.
-- **🛡️ API Gateway & BFF**: 
-  - Use a gateway (e.g., Nginx, Kong) for global concerns like ingress, rate limiting, and SSL termination.
-  - Implement a **BFF (Backend for Frontend)** layer (possibly GraphQL) to aggregate data and reduce round-trips for clients.
-- **📡 Service Discovery**: Leverage Kubernetes native DNS or tools like Consul/Etcd to dynamically locate service instances without hardcoded URLs.
-- **📨 Event-Driven Architecture**:
-  - **Async Messaging**: Decouple critical paths (e.g., "Order Created" -> "Stock Deducted") using RabbitMQ or Kafka.
-  - **Outbox Pattern**: Implement the Transactional Outbox Pattern to ensure data consistency between the database and the message broker.
-- **🔒 Security**: 
-  - **Zero Trust**: Implement **mTLS** for encrypted service-to-service communication.
-  - **Auth**: Centralized **OAuth2/OIDC** (e.g., Keycloak) for user authentication and JWT verification.
-- **🛡️ Resilience**: Apply **Circuit Breakers** (e.g., Hystrix/GoResilience) and **Retries** with exponential backoff to prevent cascading failures.
-- **🗄️ Data Management**: Replace `AutoMigrate` with versioned **Database Migrations** (e.g., Golang-Migrate) for safe schema evolution.
-- **📝 Documentation**: Auto-generate API documentation using **Swagger/OpenAPI** to keep API contracts up-to-date.
-- **⚡ High Performance Communication**: Migrate internal service-to-service communication from HTTP/REST to **gRPC** (Protobuf) for lower latency and strict schema enforcement.
-- **🚀 CI/CD**: Set up automated pipelines (GitHub Actions) for testing, building, and deploying.
+### Phase 3: CI/CD & Automation
+- [ ] **CI Pipeline**: GitHub Actions to run tests and linting on PRs.
+- [ ] **Image Publishing**: Auto-build and push Docker images to Registry (Docker Hub/ECR) on merge.
+
+### Phase 4: Kubernetes (K8s) Migration
+- [ ] Create Helm Charts or K8s Manifests (Deployment, Service, Ingress).
+- [ ] Implement **Liveness & Readiness Probes** for zero-downtime deployments.
+- [ ] **Secrets Management**: Move sensitive `.env` data to K8s Secrets or HashiCorp Vault.
+
+### Phase 5: Security & Resilience
+- [ ] **API Gateway Auth**: Implement JWT validation at the Gateway level.
+- [ ] **Rate Limiting**: Protect services using Redis-based rate limiting in the Gateway.
+- [ ] **Circuit Breaking**: Enhance clients with Hystrix/Resilience4j patterns.
