@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS orders (
     status VARCHAR(50),
     total_amount BIGINT,
     trace_id VARCHAR(255),
+    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     INDEX idx_trace_id (trace_id)
 );
 
