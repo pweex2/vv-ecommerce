@@ -30,4 +30,6 @@ COPY --from=builder /app/services/payment-service/configs ./configs
 
 EXPOSE 8083
 
+RUN chmod +x ./payment-service
+
 CMD ["./payment-service"]

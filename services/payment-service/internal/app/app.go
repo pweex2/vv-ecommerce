@@ -12,7 +12,6 @@ import (
 
 	"payment-service/internal/config"
 	"payment-service/internal/handler"
-	"payment-service/internal/model"
 	"payment-service/internal/repository"
 	"payment-service/internal/router"
 	"payment-service/internal/service"
@@ -34,12 +33,6 @@ func New(cfg *config.Config) (*App, func(), error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// AutoMigrate models
-	err = db.AutoMigrate(&model.Payment{})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to auto migrate database: %w", err)
 	}
 
 	// 2. Core Logic

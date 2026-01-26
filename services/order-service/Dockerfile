@@ -31,4 +31,6 @@ COPY --from=builder /app/services/order-service/configs ./configs
 
 EXPOSE 8081
 
+RUN chmod +x ./order-service
+
 CMD ["./order-service"]

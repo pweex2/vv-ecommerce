@@ -28,6 +28,9 @@ WORKDIR /app
 COPY --from=builder /app/services/inventory-service/inventory-service .
 COPY --from=builder /app/services/inventory-service/configs ./configs
 
+# Expose port
 EXPOSE 8082
+
+RUN chmod +x ./inventory-service
 
 CMD ["./inventory-service"]

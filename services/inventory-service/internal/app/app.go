@@ -12,7 +12,6 @@ import (
 
 	"inventory-service/internal/config"
 	"inventory-service/internal/handler"
-	"inventory-service/internal/model"
 	"inventory-service/internal/repository"
 	"inventory-service/internal/router"
 	"inventory-service/internal/service"
@@ -35,12 +34,6 @@ func New(cfg *config.Config) (*App, func(), error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// AutoMigrate models
-	err = db.AutoMigrate(&model.Inventory{})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to auto migrate database: %w", err)
 	}
 
 	// 2. Core Logic

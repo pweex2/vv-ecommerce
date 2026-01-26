@@ -1,6 +1,47 @@
 version: "3.9"
 
 services:
+  # --- Infrastructure ---
+  mysql:
+    image: mysql:8.0
+    container_name: vv-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/init/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: vv-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: always
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  redis:
+    image: redis:7
+    container_name: vv-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # --- Application Services ---
   api-gateway:
     build:
       context: .
@@ -10,9 +51,9 @@ services:
       - "8000:8000"
     environment:
       - SERVER_PORT=8000
-      - ORDER_SERVICE_URL=http://order-service:${ORDER_PORT}
-      - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_PORT}
-      - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_PORT}
+      - ORDER_SERVICE_URL=http://order-service:8081
+      - INVENTORY_SERVICE_URL=http://inventory-service:8082
+      - PAYMENT_SERVICE_URL=http://payment-service:8083
     depends_on:
       - order-service
       - inventory-service
@@ -24,21 +65,30 @@ services:
       dockerfile: services/order-service/Dockerfile
     container_name: order-service
     ports:
-      - "${ORDER_PORT}:${ORDER_PORT}"
+      - "8081:8081"
     environment:
-      - SERVER_PORT=${ORDER_PORT}
-      # Point to host machine's localhost (local-infra)
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
-      - REDIS_HOST=${REDIS_HOST}
-      # Service Discovery (Docker DNS)
-      - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_PORT}
-      - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_PORT}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - SERVER_PORT=8081
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root
+      - DATABASE_DBNAME=order_db
+      - REDIS_ADDR=redis:6379  # Order Service uses "Addr"
+      - MQ_HOST=rabbitmq
+      - MQ_PORT=5672
+      - INVENTORY_SERVICE_URL=http://inventory-service:8082
+      - PAYMENT_SERVICE_URL=http://payment-service:8083
     depends_on:
-      - inventory-service
-      - payment-service
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      inventory-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
 
   inventory-service:
     build:
@@ -46,14 +96,21 @@ services:
       dockerfile: services/inventory-service/Dockerfile
     container_name: inventory-service
     ports:
-      - "${INVENTORY_PORT}:${INVENTORY_PORT}"
+      - "8082:8082"
     environment:
-      - SERVER_PORT=${INVENTORY_PORT}
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
-      - REDIS_HOST=${REDIS_HOST}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - SERVER_PORT=8082
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root
+      - DATABASE_DBNAME=inventory_db
+      - REDIS_HOST=redis      # Inventory Service uses "Host"
+      - REDIS_PORT=6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   payment-service:
     build:
@@ -61,10 +118,17 @@ services:
       dockerfile: services/payment-service/Dockerfile
     container_name: payment-service
     ports:
-      - "${PAYMENT_PORT}:${PAYMENT_PORT}"
+      - "8083:8083"
     environment:
-      - SERVER_PORT=${PAYMENT_PORT}
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - SERVER_PORT=8083
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root
+      - DATABASE_DBNAME=payment_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
