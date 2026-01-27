@@ -11,6 +11,7 @@ import (
 type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *model.Order) error
 	GetOrderByID(ctx context.Context, orderID string) (*model.Order, error)
+	GetOrders(ctx context.Context) ([]*model.Order, error)
 	UpdateOrderStatus(ctx context.Context, orderID string, status model.OrderStatus) (int64, error)
 	SaveOutboxEvent(ctx context.Context, event *model.OutboxEvent) error
 	GetPendingOutboxEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error)
@@ -36,6 +37,15 @@ func (r *GORMOrderRepository) GetOrderByID(ctx context.Context, orderID string) 
 		return nil, nil // Order not found
 	}
 	return &order, err
+}
+
+func (r *GORMOrderRepository) GetOrders(ctx context.Context) ([]*model.Order, error) {
+	var orders []*model.Order
+	err := database.GetDB(ctx, r.db).Order("created_at desc").Limit(20).Find(&orders).Error
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
 }
 
 func (r *GORMOrderRepository) UpdateOrderStatus(ctx context.Context, orderID string, status model.OrderStatus) (int64, error) {

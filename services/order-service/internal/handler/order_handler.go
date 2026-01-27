@@ -61,6 +61,15 @@ func (h *OrderHandler) GetOrderHandler(c *gin.Context) {
 	response.Success(c, order)
 }
 
+func (h *OrderHandler) ListOrdersHandler(c *gin.Context) {
+	orders, err := h.service.GetOrders(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, orders)
+}
+
 func (h *OrderHandler) UpdateOrderStatusHandler(c *gin.Context) {
 	var input struct {
 		OrderID string            `json:"order_id" binding:"required"`

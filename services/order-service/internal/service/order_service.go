@@ -139,9 +139,21 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*model.Ord
 		return nil, apperror.Internal("database error", err)
 	}
 	if order == nil {
-		return nil, apperror.NotFound("order not found", nil)
+		return nil, apperror.NotFound("Order not found", nil)
 	}
 	return order, nil
+}
+
+func (s *OrderService) GetOrders(ctx context.Context) ([]*model.Order, error) {
+	orders, err := s.repo.GetOrders(ctx)
+	if err != nil {
+		return nil, apperror.Internal("failed to fetch orders", err)
+	}
+	// 如果没有订单，返回空切片而不是 nil (虽然 nil slice 序列化也是 null/[]，但显式一点更好)
+	if orders == nil {
+		orders = []*model.Order{}
+	}
+	return orders, nil
 }
 
 func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, status model.OrderStatus) (int64, error) {
