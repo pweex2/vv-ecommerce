@@ -32,6 +32,7 @@ docker-compose up --build
 ### 4. Access
 | Service | URL / Port | Description |
 | :--- | :--- | :--- |
+| **Frontend** | `http://localhost:3000` | **Web UI Dashboard**. User interface for managing orders and products. |
 | **API Gateway** | `http://localhost:8000` | **Main Entry Point**. All API requests go here. |
 | **MySQL** | `localhost:3306` | Database (User: `root`, Pass: `root`) |
 | **RabbitMQ UI** | `http://localhost:15672` | Message Queue Dashboard (User: `guest`, Pass: `guest`) |
@@ -81,6 +82,7 @@ This project implements the **Saga Pattern (Orchestration-based)** and **Transac
 
 | Service | Internal Port | Description |
 |---------|---------------|-------------|
+| **Frontend** | `:3000` | React-based User Interface. |
 | **API Gateway** | `:8000` | Routes requests to internal services. **Publicly Exposed**. |
 | **Order Service** | `:8081` | Manages orders. Orchestrates Sagas. |
 | **Inventory Service** | `:8082` | Manages stock levels. |
