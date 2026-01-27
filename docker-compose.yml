@@ -59,6 +59,16 @@ services:
       - inventory-service
       - payment-service
 
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: vv-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
   order-service:
     build:
       context: .
