@@ -22,9 +22,10 @@ func NewOrderHandler(s *service.OrderService) *OrderHandler {
 
 func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 	var input struct {
-		UserID      int64  `json:"user_id" binding:"required,gt=0"`
-		TotalAmount int64  `json:"total_amount" binding:"required,gt=0"`
-		SKU         string `json:"sku" binding:"required"`
+		UserID   int64  `json:"user_id" binding:"required,gt=0"`
+		Quantity int64  `json:"quantity" binding:"required,gt=0"`
+		Price    int64  `json:"price" binding:"required,gt=0"`
+		SKU      string `json:"sku" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -32,7 +33,7 @@ func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.CreateOrder(c.Request.Context(), input.UserID, input.TotalAmount, input.SKU)
+	order, err := h.service.CreateOrder(c.Request.Context(), input.UserID, input.Quantity, input.Price, input.SKU)
 	if err != nil {
 		response.Error(c, err)
 		return

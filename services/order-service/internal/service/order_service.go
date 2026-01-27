@@ -36,11 +36,13 @@ func NewOrderService(repo repository.OrderRepository, inventoryClient *clients.I
 	return &OrderService{repo: repo, inventoryClient: inventoryClient, paymentClient: paymentClient, compensator: compensator, tm: tm}
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmount int64, sku string) (*model.Order, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity int64, price int64, sku string) (*model.Order, error) {
 	orderID := uuid.New().String()
 	traceID := uuid.New().String()
 	reqID := uuid.New().String()
 	var err error
+
+	totalAmount := quantity * price
 
 	order := &model.Order{
 		OrderID:     orderID,
@@ -58,7 +60,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 	// retry 3 times
 	for i := 0; i < 3; i++ {
 		// 调用库存服务减少库存
-		err = s.inventoryClient.Decrease(sku, reqID, orderID, traceID, totalAmount)
+		err = s.inventoryClient.Decrease(sku, reqID, orderID, traceID, quantity)
 		if err == nil {
 			break
 		}
@@ -92,7 +94,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, totalAmoun
 
 			payload := map[string]interface{}{
 				"sku":      sku,
-				"quantity": totalAmount,
+				"quantity": quantity,
 				"trace_id": traceID,
 			}
 			outboxEvent := &model.OutboxEvent{

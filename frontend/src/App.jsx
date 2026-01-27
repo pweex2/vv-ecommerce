@@ -45,7 +45,7 @@ function OrdersPanel() {
   const [loading, setLoading] = useState(false)
   const [createForm, setCreateForm] = useState({
     user_id: 1,
-    product_id: "101",
+    product_id: "PHONE-001",
     quantity: 1,
     price: 100
   })
@@ -60,6 +60,7 @@ function OrdersPanel() {
         throw new Error(errData.msg || `Server error: ${res.status}`)
       }
       const data = await res.json()
+      console.log("Fetch orders response:", data)
       setOrders(data.data || [])
     } catch (err) {
       console.error("Fetch error:", err)
@@ -76,11 +77,9 @@ function OrdersPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: Number(createForm.user_id),
-          items: [{
-            product_id: createForm.product_id,
-            quantity: Number(createForm.quantity),
-            price: Number(createForm.price)
-          }]
+          sku: createForm.product_id,
+          quantity: Number(createForm.quantity),
+          price: Number(createForm.price)
         })
       })
       const data = await res.json()
@@ -135,8 +134,8 @@ function OrdersPanel() {
           </thead>
           <tbody>
             {orders.map(o => (
-              <tr key={o.id}>
-                <td>{o.id}</td>
+              <tr key={o.order_id}>
+                <td>{o.order_id}</td>
                 <td>{o.user_id}</td>
                 <td>${(o.total_amount / 100).toFixed(2)}</td>
                 <td><span className={`status ${o.status}`}>{o.status}</span></td>
@@ -156,7 +155,7 @@ function InventoryPanel() {
   const [inventoryData, setInventoryData] = useState(null)
   const [createForm, setCreateForm] = useState({
     product_id: 101,
-    sku: "SKU-001",
+    sku: "PHONE-001",
     quantity: 100
   })
 

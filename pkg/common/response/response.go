@@ -7,9 +7,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Success 200 OK，直接返回数据对象
+// SuccessResponse 定义统一的成功返回结构
+type SuccessResponse struct {
+	Code int         `json:"code"`
+	Msg  string      `json:"msg"`
+	Data interface{} `json:"data"`
+}
+
+// Success 200 OK，返回统一结构
 func Success(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusOK, data)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Code: 0,
+		Msg:  "success",
+		Data: data,
+	})
 }
 
 // ErrorResponse 定义统一的错误返回结构
