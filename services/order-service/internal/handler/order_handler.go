@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
 	"order-service/internal/model"
 	"order-service/internal/service"
 	"vv-ecommerce/pkg/common/apperror"
@@ -39,7 +40,7 @@ func (h *OrderHandler) CreateOrderHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, order)
+	c.JSON(http.StatusOK, order)
 }
 
 func (h *OrderHandler) GetOrderHandler(c *gin.Context) {
@@ -59,7 +60,7 @@ func (h *OrderHandler) GetOrderHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, order)
+	c.JSON(http.StatusOK, order)
 }
 
 func (h *OrderHandler) ListOrdersHandler(c *gin.Context) {
@@ -68,7 +69,7 @@ func (h *OrderHandler) ListOrdersHandler(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, orders)
+	c.JSON(http.StatusOK, orders)
 }
 
 func (h *OrderHandler) UpdateOrderStatusHandler(c *gin.Context) {
@@ -93,5 +94,5 @@ func (h *OrderHandler) UpdateOrderStatusHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]string{"message": fmt.Sprintf("Order %s updated to %s", input.OrderID, input.Status)})
+	c.JSON(http.StatusOK, map[string]string{"message": fmt.Sprintf("Order %s updated to %s", input.OrderID, input.Status)})
 }

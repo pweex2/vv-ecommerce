@@ -43,6 +43,10 @@ func (s *PaymentService) ProcessPayment(orderID string, amount int64) (*model.Pa
 	if amount < 0 {
 		newStatus = string(constants.PaymentStatusFailed)
 		err = errors.New("invalid amount")
+	} else if amount == 9999 {
+		// 模拟特定金额触发支付失败 (用于测试分布式事务回滚)
+		newStatus = string(constants.PaymentStatusFailed)
+		err = errors.New("simulated payment failure for testing")
 	} else {
 		// 模拟 10% 的失败率 (可选，用于测试容错)
 		// if rand.Intn(10) == 0 {

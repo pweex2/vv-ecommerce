@@ -9,17 +9,17 @@ import (
 
 // SuccessResponse 定义统一的成功返回结构
 type SuccessResponse struct {
-	Code int         `json:"code"`
-	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
 }
 
 // Success 200 OK，返回统一结构
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, SuccessResponse{
-		Code: 0,
-		Msg:  "success",
-		Data: data,
+		Code:    0,
+		Message: "success",
+		Data:    data,
 	})
 }
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
 
 	"inventory-service/internal/service"
@@ -41,7 +42,7 @@ func (h *InventoryHandler) GetInventoriesByProductID(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, inventories)
+	c.JSON(http.StatusOK, inventories)
 }
 
 func (h *InventoryHandler) GetInventoryBySKU(c *gin.Context) {
@@ -57,7 +58,7 @@ func (h *InventoryHandler) GetInventoryBySKU(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, inventory)
+	c.JSON(http.StatusOK, inventory)
 }
 
 func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
@@ -88,7 +89,7 @@ func (h *InventoryHandler) DecreaseInventory(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]string{"message": "Inventory decreased successfully"})
+	c.JSON(http.StatusOK, map[string]string{"message": "Inventory decreased successfully"})
 }
 
 func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
@@ -112,7 +113,7 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]string{"message": "Inventory increased successfully"})
+	c.JSON(http.StatusOK, map[string]string{"message": "Inventory increased successfully"})
 }
 
 func (h *InventoryHandler) CreateInventory(c *gin.Context) {
@@ -132,7 +133,7 @@ func (h *InventoryHandler) CreateInventory(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]string{"message": "Inventory created successfully"})
+	c.JSON(http.StatusOK, map[string]string{"message": "Inventory created successfully"})
 }
 
 func (h *InventoryHandler) UpdateInventory(c *gin.Context) {
@@ -151,5 +152,5 @@ func (h *InventoryHandler) UpdateInventory(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]string{"message": "Inventory updated successfully"})
+	c.JSON(http.StatusOK, map[string]string{"message": "Inventory updated successfully"})
 }

@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,15 +43,49 @@ func (h *GatewayHandler) Proxy(target *url.URL) gin.HandlerFunc {
 			originalDirector(req)
 			// 这里可以添加额外的 Header，比如把网关收到的 UserID 传下去
 			// req.Header.Set("X-User-ID", c.GetString("user_id"))
-			
+
 			// 重要：我们需要重写 Host Header，否则有些后端服务会拒绝请求
-			req.Host = target.Host 
+			req.Host = target.Host
 		}
 
 		// 自定义 ErrorHandler
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			fmt.Printf("Proxy error: %v\n", err)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Service unavailable"})
+		}
+
+		// ModifyResponse: 统一包装成功响应为 {code: 0, msg: "success", data: ...}
+		proxy.ModifyResponse = func(resp *http.Response) error {
+			// 只处理 200 OK 且是 JSON 的响应
+			if resp.StatusCode == http.StatusOK && strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return err
+				}
+				resp.Body.Close()
+
+				// 构造统一响应结构
+				wrapper := struct {
+					Code    int             `json:"code"`
+					Message string          `json:"message"`
+					Data    json.RawMessage `json:"data"`
+				}{
+					Code:    0,
+					Message: "success",
+					Data:    json.RawMessage(body),
+				}
+
+				newBody, err := json.Marshal(wrapper)
+				if err != nil {
+					return err
+				}
+
+				// 重置 Body 和 Content-Length
+				resp.Body = io.NopCloser(bytes.NewReader(newBody))
+				resp.ContentLength = int64(len(newBody))
+				resp.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
+			}
+			return nil
 		}
 
 		proxy.ServeHTTP(c.Writer, c.Request)

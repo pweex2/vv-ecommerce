@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net/http"
 	"payment-service/internal/service"
 	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
@@ -36,7 +37,7 @@ func (h *PaymentHandler) ProcessPaymentHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, payment)
+	c.JSON(http.StatusOK, payment)
 }
 
 func (h *PaymentHandler) GetPaymentHandler(c *gin.Context) {
@@ -52,5 +53,5 @@ func (h *PaymentHandler) GetPaymentHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, payment)
+	c.JSON(http.StatusOK, payment)
 }
