@@ -23,6 +23,7 @@ func NewRouter(h *handler.PaymentHandler) *gin.Engine {
 
 	// Payment Routes
 	r.POST("/payments", h.ProcessPaymentHandler)
+	r.POST("/payments/refund", h.RefundPaymentHandler)
 	r.GET("/payments", h.GetPaymentHandler)
 
 	return r
