@@ -96,7 +96,6 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 	var req struct {
 		SKU      string `json:"sku" binding:"required"`
 		Quantity int    `json:"quantity" binding:"required,gt=0"`
-		TraceID  string `json:"trace_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -104,16 +103,32 @@ func (h *InventoryHandler) IncreaseInventory(c *gin.Context) {
 		return
 	}
 
-	if req.TraceID == "" {
-		req.TraceID = middleware.GetTraceID(c)
-	}
-
-	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity, req.TraceID); err != nil {
+	if err := h.service.IncreaseInventory(c.Request.Context(), req.SKU, req.Quantity); err != nil {
 		response.Error(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, map[string]string{"message": "Inventory increased successfully"})
+}
+
+func (h *InventoryHandler) RollbackInventory(c *gin.Context) {
+	var req struct {
+		SKU      string `json:"sku" binding:"required"`
+		Quantity int    `json:"quantity" binding:"required,gt=0"`
+		TraceID  string `json:"trace_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, apperror.InvalidInput("invalid request body or validation failed", err))
+		return
+	}
+
+	if err := h.service.RollbackInventory(c.Request.Context(), req.SKU, req.Quantity, req.TraceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]string{"message": "Inventory rollback successfully"})
 }
 
 func (h *InventoryHandler) CreateInventory(c *gin.Context) {

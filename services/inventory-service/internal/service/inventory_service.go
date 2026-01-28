@@ -102,13 +102,51 @@ func (s *InventoryService) DecreaseInventory(ctx context.Context, reqID, sku, or
 	return nil
 }
 
-func (s *InventoryService) IncreaseInventory(ctx context.Context, sku string, quantity int, traceID string) error {
+func (s *InventoryService) RollbackInventory(ctx context.Context, sku string, quantity int, traceID string) error {
 	if quantity <= 0 {
 		return apperror.InvalidInput("quantity must be positive", nil)
 	}
-	// TODO: Log traceID for rollback tracking if needed
-	// log.Printf("IncreaseInventory (Rollback?) - SKU: %s, Qty: %d, TraceID: %s", sku, quantity, traceID)
 
+	// 1. Idempotency Check: Find Deduction Log
+	log, err := s.repo.GetDeductionLog(ctx, sku, traceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// If no deduction log exists, it means the deduction likely failed or never happened.
+			// In this case, we don't need to roll back anything.
+			// Return success to ensure idempotency.
+			return nil
+		}
+		return apperror.Internal("database error checking deduction log", err)
+	}
+
+	// 2. Check Status
+	if log.Status == "ROLLED_BACK" {
+		// Already rolled back, ignore
+		return nil
+	}
+
+	// 3. Transaction: Increase Inventory + Update Log Status
+	err = s.tm.Transaction(ctx, func(ctx context.Context) error {
+		if err := s.repo.IncreaseInventory(ctx, sku, quantity); err != nil {
+			return err
+		}
+		if err := s.repo.UpdateDeductionLogStatus(ctx, log.ID, "ROLLED_BACK"); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return apperror.Internal("failed to increase inventory (rollback)", err)
+	}
+	return nil
+}
+
+func (s *InventoryService) IncreaseInventory(ctx context.Context, sku string, quantity int) error {
+	if quantity <= 0 {
+		return apperror.InvalidInput("quantity must be positive", nil)
+	}
+	// Simple increase for restocking
 	if err := s.repo.IncreaseInventory(ctx, sku, quantity); err != nil {
 		return apperror.Internal("failed to increase inventory", err)
 	}

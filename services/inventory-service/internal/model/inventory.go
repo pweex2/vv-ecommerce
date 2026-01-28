@@ -18,5 +18,6 @@ type InventoryDeductionLog struct {
 	SKU       string    `gorm:"type:varchar(255);index" json:"sku"`              // 商品 SKU
 	TraceID   string    `gorm:"type:varchar(255);index" json:"trace_id"`         // 分布式追踪 ID
 	Quantity  int       `json:"quantity"`
+	Status    string    `gorm:"type:varchar(50);default:'DEDUCTED'" json:"status"` // 状态: DEDUCTED, ROLLED_BACK
 	CreatedAt time.Time `json:"created_at"`
 }

@@ -28,6 +28,7 @@ func NewRouter(h *handler.InventoryHandler) *gin.Engine {
 	// r.POST("/inventory/update", h.UpdateInventory) // 暂时移除 UpdateInventory，使用 Increase/Decrease
 	r.POST("/inventory/decrease", h.DecreaseInventory)
 	r.POST("/inventory/increase", h.IncreaseInventory)
+	r.POST("/inventory/rollback", h.RollbackInventory)
 
 	return r
 }
