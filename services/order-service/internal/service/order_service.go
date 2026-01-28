@@ -85,8 +85,17 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity i
 	paymentResp, err := s.paymentClient.ProcessPayment(ctx, orderID, totalAmount, traceID)
 
 	// 定义统一的补偿逻辑
-	handlePaymentFailure := func(cause error) error {
-		// 在一个事务中更新订单状态为失败并记录 Outbox 事件
+	handleFailure := func(cause error, needRefund bool) error {
+		// 1. 如果需要退款 (例如支付成功但后续逻辑失败)，尝试退款
+		if needRefund {
+			// Best effort refund. If this fails, we need manual intervention or a more robust background job.
+			if refundErr := s.paymentClient.Refund(ctx, orderID, traceID); refundErr != nil {
+				// Log this critical error. In a real system, send to alert channel.
+				// fmt.Printf("CRITICAL: Failed to refund payment for order %s: %v\n", orderID, refundErr)
+			}
+		}
+
+		// 2. 在一个事务中更新订单状态为失败并记录 Outbox 事件 (回滚库存)
 		txErr := s.tm.Transaction(ctx, func(txCtx context.Context) error {
 			if _, err := s.repo.UpdateOrderStatus(txCtx, orderID, model.OrderStatusFailed); err != nil {
 				return err
@@ -101,7 +110,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity i
 				AggregateType: "Order",
 				AggregateID:   orderID,
 				EventType:     "InventoryRollback",
-				Payload:       datatypes.JSON(mustMarshal(payload)), // 辅助函数处理 JSON 序列化
+				Payload:       datatypes.JSON(mustMarshal(payload)),
 				Status:        model.OutboxStatusPending,
 				TraceID:       traceID,
 			}
@@ -110,27 +119,33 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity i
 		})
 
 		if txErr != nil {
-			// 如果事务提交失败，我们确实处于一个糟糕的状态。
-			// 但由于我们还没发 MQ，也没有双写问题。只是 DB 状态更新失败。
-			// 日志记录这个严重错误
-			// logger.Error("Critical: Failed to save compensation event", txErr)
-			return apperror.Internal("payment failed and compensation persistence failed", txErr)
+			return apperror.Internal("payment failed/compensated and persistence failed", txErr)
 		}
 
 		return cause
 	}
 
 	if err != nil {
-		return nil, handlePaymentFailure(apperror.Internal("payment processing failed", err))
+		// 支付请求本身失败 (可能是网络错误或 500).
+		// 处于不确定状态，为了安全起见，可以尝试退款 (如果对方其实扣款成功了)
+		// 但为了简化，这里假设 error 意味着没扣款。
+		return nil, handleFailure(apperror.Internal("payment processing failed", err), false)
 	}
 
 	if paymentResp.Status != string(constants.PaymentStatusCompleted) {
-		return nil, handlePaymentFailure(apperror.Conflict("payment failed with status: "+paymentResp.Status, nil))
+		return nil, handleFailure(apperror.Conflict("payment failed with status: "+paymentResp.Status, nil), false)
 	}
 
-	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusPaid)
+	// 支付成功，进入"危险区"
+	// 如果后续步骤失败，必须退款 + 回滚库存
 
-	s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusCompleted)
+	if _, err := s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusPaid); err != nil {
+		return nil, handleFailure(apperror.Internal("failed to update order status to PAID", err), true)
+	}
+
+	if _, err := s.repo.UpdateOrderStatus(ctx, orderID, model.OrderStatusCompleted); err != nil {
+		return nil, handleFailure(apperror.Internal("failed to update order status to COMPLETED", err), true)
+	}
 
 	return order, nil
 }

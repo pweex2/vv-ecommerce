@@ -40,6 +40,23 @@ func (h *PaymentHandler) ProcessPaymentHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, payment)
 }
 
+func (h *PaymentHandler) RefundPaymentHandler(c *gin.Context) {
+	var req struct {
+		OrderID string `json:"order_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, apperror.InvalidInput("Invalid request body", err))
+		return
+	}
+
+	if err := h.service.RefundPayment(req.OrderID); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]string{"message": "Refund processed successfully"})
+}
+
 func (h *PaymentHandler) GetPaymentHandler(c *gin.Context) {
 	orderID := c.Query("order_id")
 	if orderID == "" {

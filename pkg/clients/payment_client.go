@@ -71,6 +71,32 @@ func (c *PaymentClient) ProcessPayment(ctx context.Context, orderID string, amou
 	return &paymentResp, nil
 }
 
+func (c *PaymentClient) Refund(ctx context.Context, orderID string, traceID string) error {
+	reqBody := map[string]string{"order_id": orderID}
+	body, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments/refund", bytes.NewBuffer(body))
+	if err != nil {
+		return WrapClientError(err, "failed to create request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if traceID != "" {
+		req.Header.Set("X-Trace-ID", traceID)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return WrapClientError(err, "failed to call payment service")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return HandleHTTPError(resp)
+	}
+
+	return nil
+}
+
 func (c *PaymentClient) GetPayment(orderID string) (*PaymentResponse, error) {
 	resp, err := c.client.Get(fmt.Sprintf("%s/payments?order_id=%s", c.baseURL, orderID))
 	if err != nil {

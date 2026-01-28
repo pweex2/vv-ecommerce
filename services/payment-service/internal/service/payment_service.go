@@ -71,6 +71,25 @@ func (s *PaymentService) ProcessPayment(orderID string, amount int64) (*model.Pa
 	return payment, err
 }
 
+func (s *PaymentService) RefundPayment(orderID string) error {
+	payment, err := s.repo.GetPaymentByOrderID(orderID)
+	if err != nil {
+		return err
+	}
+
+	if payment.Status != string(constants.PaymentStatusCompleted) {
+		return errors.New("cannot refund payment: payment not completed")
+	}
+
+	// In a real system, we would call the payment gateway's refund API here.
+	refundTransactionID := "REF-" + uuid.New().String()
+
+	if err := s.repo.UpdatePaymentStatus(payment.ID, string(constants.PaymentStatusRefunded), refundTransactionID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *PaymentService) GetPayment(orderID string) (*model.Payment, error) {
 	return s.repo.GetPaymentByOrderID(orderID)
 }
