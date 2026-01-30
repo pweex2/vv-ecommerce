@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-pkg:
+    name: Test Pkg
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Test Pkg
+        working-directory: ./pkg
+        run: |
+          go mod download
+          go vet ./...
+          go test -v ./...
+
+  test-services:
+    name: Test Service
+    needs: test-pkg
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-gateway, inventory-service, order-service, payment-service]
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Test ${{ matrix.service }}
+        working-directory: ./services/${{ matrix.service }}
+        run: |
+          go mod download
+          go vet ./...
+          go test -v ./...
+          go build -v ./...
