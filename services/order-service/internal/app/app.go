@@ -17,6 +17,7 @@ import (
 	"vv-ecommerce/pkg/async"
 	"vv-ecommerce/pkg/clients"
 	"vv-ecommerce/pkg/database"
+	"vv-ecommerce/pkg/trace"
 )
 
 type App struct {
@@ -27,6 +28,12 @@ type App struct {
 }
 
 func New(cfg *config.Config) (*App, func(), error) {
+	// 0. Initialize Tracing
+	shutdownTracer, err := trace.InitTracer("order-service", cfg.OtelCollectorURL)
+	if err != nil {
+		log.Printf("Failed to init tracer: %v", err)
+	}
+
 	// 1. Database
 	db, err := database.NewMySQLConnection(database.Config{
 		User:     cfg.Database.User,
@@ -75,6 +82,11 @@ func New(cfg *config.Config) (*App, func(), error) {
 		outboxProcessor.Stop() // Stop outbox processor
 		if err := messageQueue.Close(); err != nil {
 			log.Printf("Error closing message queue: %v", err)
+		}
+		if shutdownTracer != nil {
+			if err := shutdownTracer(context.Background()); err != nil {
+				log.Printf("Error shutting down tracer: %v", err)
+			}
 		}
 	}
 

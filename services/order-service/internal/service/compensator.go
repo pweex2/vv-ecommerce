@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"vv-ecommerce/pkg/async"
@@ -36,6 +37,6 @@ func (c *InventoryCompensator) StartWorker() error {
 		}
 
 		fmt.Printf("Processing async rollback for SKU %s, Qty %d, TraceID %s\n", msg.SKU, msg.Quantity, msg.TraceID)
-		return c.client.Rollback(msg.SKU, msg.Quantity, msg.TraceID)
+		return c.client.Rollback(context.Background(), msg.SKU, msg.Quantity, msg.TraceID)
 	})
 }

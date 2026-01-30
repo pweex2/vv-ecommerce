@@ -31,10 +31,11 @@ type MQConfig struct {
 }
 
 type Config struct {
-	ServerPort int            `mapstructure:"ServerPort"`
-	Database   DatabaseConfig `mapstructure:"Database"`
-	Redis      RedisConfig    `mapstructure:"Redis"`
-	MQ         MQConfig       `mapstructure:"MQ"`
+	ServerPort       int            `mapstructure:"ServerPort"`
+	Database         DatabaseConfig `mapstructure:"Database"`
+	Redis            RedisConfig    `mapstructure:"Redis"`
+	MQ               MQConfig       `mapstructure:"MQ"`
+	OtelCollectorURL string         `mapstructure:"OtelCollectorURL"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -70,7 +71,8 @@ func LoadConfig() (*Config, error) {
 
 	// Allow environment variables to override config, replacing . with _
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv() // read in environment variables that match
+	viper.BindEnv("OtelCollectorURL", "OTEL_EXPORTER_OTLP_ENDPOINT") // Bind to correct env var
+	viper.AutomaticEnv()                                             // read in environment variables that match
 
 	cfg := &Config{}
 	if err := viper.Unmarshal(cfg); err != nil {

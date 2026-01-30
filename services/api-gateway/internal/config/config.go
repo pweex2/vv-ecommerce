@@ -11,6 +11,7 @@ type Config struct {
 	OrderServiceURL     string
 	InventoryServiceURL string
 	PaymentServiceURL   string
+	OtelCollectorURL    string
 }
 
 func Load() *Config {
@@ -19,6 +20,7 @@ func Load() *Config {
 		OrderServiceURL:     getEnv("ORDER_SERVICE_URL", "http://localhost:8080"),
 		InventoryServiceURL: getEnv("INVENTORY_SERVICE_URL", "http://localhost:8081"),
 		PaymentServiceURL:   getEnv("PAYMENT_SERVICE_URL", "http://localhost:8082"),
+		OtelCollectorURL:    getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "jaeger:4317"),
 	}
 }
 

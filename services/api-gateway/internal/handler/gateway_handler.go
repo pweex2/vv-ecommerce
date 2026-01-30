@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type GatewayHandler struct {
@@ -36,6 +37,9 @@ func NewGatewayHandler(orderURL, inventoryURL, paymentURL string) *GatewayHandle
 func (h *GatewayHandler) Proxy(target *url.URL) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		proxy := httputil.NewSingleHostReverseProxy(target)
+
+		// Configure Transport to propagate traces
+		proxy.Transport = otelhttp.NewTransport(http.DefaultTransport)
 
 		// 自定义 Director 来修改请求（如果需要）
 		originalDirector := proxy.Director

@@ -60,7 +60,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity i
 	// retry 3 times
 	for i := 0; i < 3; i++ {
 		// 调用库存服务减少库存
-		err = s.inventoryClient.Decrease(sku, reqID, orderID, traceID, quantity)
+		err = s.inventoryClient.Decrease(ctx, sku, reqID, orderID, traceID, quantity)
 		if err == nil {
 			break
 		}

@@ -7,10 +7,12 @@ import (
 	"vv-ecommerce/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func NewRouter(h *handler.InventoryHandler) *gin.Engine {
 	r := gin.New()
+	r.Use(otelgin.Middleware("inventory-service"))
 	r.Use(middleware.TraceID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())

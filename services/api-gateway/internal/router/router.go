@@ -3,14 +3,18 @@ package router
 import (
 	"api-gateway/internal/handler"
 	"net/http"
+	"vv-ecommerce/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func NewRouter(h *handler.GatewayHandler) *gin.Engine {
-	r := gin.Default() // 使用 Default，自带 Logger 和 Recovery
-
-	// Health Check
+	r := gin.New()
+	r.Use(otelgin.Middleware("api-gateway"))
+	r.Use(middleware.TraceID())
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "API Gateway is healthy"})
 	})

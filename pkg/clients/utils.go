@@ -7,9 +7,20 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+// NewHTTPClient returns an http.Client with OpenTelemetry instrumentation
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
+}
 
 // HandleHTTPError 解析 HTTP 错误响应
 // 提取为公共函数，避免重复代码

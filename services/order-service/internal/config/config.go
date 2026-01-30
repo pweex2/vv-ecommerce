@@ -38,6 +38,7 @@ type Config struct {
 	ServerPort          int    `mapstructure:"ServerPort"`
 	InventoryServiceURL string `mapstructure:"inventory_service_url"`
 	PaymentServiceURL   string `mapstructure:"payment_service_url"`
+	OtelCollectorURL    string `mapstructure:"otel_collector_url"`
 
 	Database DatabaseConfig `mapstructure:"Database"`
 	Redis    RedisConfig    `mapstructure:"Redis"` // 占位符
@@ -85,6 +86,7 @@ func LoadConfig() (*Config, error) {
 	// Explicitly bind service URLs
 	viper.BindEnv("InventoryServiceURL", "INVENTORY_SERVICE_URL")
 	viper.BindEnv("PaymentServiceURL", "PAYMENT_SERVICE_URL")
+	viper.BindEnv("OtelCollectorURL", "OTEL_EXPORTER_OTLP_ENDPOINT") // Bind to correct env var
 
 	// Read config from environment variables
 	viper.AutomaticEnv()

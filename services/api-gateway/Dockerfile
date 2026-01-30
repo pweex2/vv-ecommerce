@@ -4,6 +4,7 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # 1. Copy go.mod and go.sum files
+COPY pkg/go.mod pkg/go.sum ./pkg/
 COPY services/api-gateway/go.mod services/api-gateway/go.sum ./services/api-gateway/
 
 # 2. Download dependencies
@@ -12,6 +13,7 @@ RUN go mod download
 
 # 3. Copy source code
 WORKDIR /app
+COPY pkg/ ./pkg/
 COPY services/api-gateway/ ./services/api-gateway/
 
 # 4. Build

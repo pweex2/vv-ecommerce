@@ -17,8 +17,9 @@ type DatabaseConfig struct {
 }
 
 type Config struct {
-	ServerPort int            `mapstructure:"ServerPort"`
-	Database   DatabaseConfig `mapstructure:"Database"`
+	ServerPort       int            `mapstructure:"ServerPort"`
+	Database         DatabaseConfig `mapstructure:"Database"`
+	OtelCollectorURL string         `mapstructure:"OtelCollectorURL"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -49,6 +50,7 @@ func LoadConfig() (*Config, error) {
 
 	// Allow environment variables to override config, replacing . with _
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.BindEnv("OtelCollectorURL", "OTEL_EXPORTER_OTLP_ENDPOINT") // Bind to correct env var
 	viper.AutomaticEnv()
 
 	cfg := &Config{}

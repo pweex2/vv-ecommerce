@@ -41,6 +41,17 @@ services:
       - "${REDIS_PORT}:6379"
     restart: always
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: vv-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    restart: always
+
   # --- Application Services ---
   api-gateway:
     build:
@@ -54,6 +65,7 @@ services:
       - ORDER_SERVICE_URL=http://order-service:${ORDER_SERVICE_PORT}
       - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_SERVICE_PORT}
       - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_SERVICE_PORT}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       - order-service
       - inventory-service
@@ -89,6 +101,7 @@ services:
       - MQ_PORT=5672
       - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_SERVICE_PORT}
       - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_SERVICE_PORT}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       mysql:
         condition: service_healthy
@@ -97,6 +110,8 @@ services:
       redis:
         condition: service_started
       inventory-service:
+        condition: service_started
+      jaeger:
         condition: service_started
       payment-service:
         condition: service_started
@@ -118,6 +133,7 @@ services:
       - DATABASE_DBNAME=inventory_db
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       mysql:
         condition: service_healthy
@@ -139,9 +155,12 @@ services:
       - DATABASE_USER=${DATABASE_USER}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - DATABASE_DBNAME=payment_db
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       mysql:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
 volumes:
   mysql-data:

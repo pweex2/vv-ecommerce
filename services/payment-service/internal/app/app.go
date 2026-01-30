@@ -15,6 +15,7 @@ import (
 	"payment-service/internal/repository"
 	"payment-service/internal/router"
 	"payment-service/internal/service"
+	"vv-ecommerce/pkg/trace"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -27,6 +28,12 @@ type App struct {
 }
 
 func New(cfg *config.Config) (*App, func(), error) {
+	// 0. Initialize Tracing
+	shutdownTracer, err := trace.InitTracer("payment-service", cfg.OtelCollectorURL)
+	if err != nil {
+		log.Printf("Failed to init tracer: %v", err)
+	}
+
 	// 1. Database
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
@@ -53,6 +60,11 @@ func New(cfg *config.Config) (*App, func(), error) {
 		}
 		if err := sqlDB.Close(); err != nil {
 			log.Printf("Error closing database connection: %v", err)
+		}
+		if shutdownTracer != nil {
+			if err := shutdownTracer(context.Background()); err != nil {
+				log.Printf("Error shutting down tracer: %v", err)
+			}
 		}
 	}
 

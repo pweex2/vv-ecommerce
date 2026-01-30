@@ -18,7 +18,7 @@ type PaymentClient struct {
 func NewPaymentClient(url string) *PaymentClient {
 	return &PaymentClient{
 		baseURL: url,
-		client:  &http.Client{Timeout: 5 * time.Second},
+		client:  NewHTTPClient(5 * time.Second),
 	}
 }
 
