@@ -37,6 +37,7 @@ docker-compose up --build
 | **MySQL** | `localhost:3306` | Database (User: `root`, Pass: `root`) |
 | **RabbitMQ UI** | `http://localhost:15672` | Message Queue Dashboard (User: `guest`, Pass: `guest`) |
 | **Redis** | `localhost:6379` | Cache |
+| **Jaeger UI** | `http://localhost:16686` | Distributed Tracing Dashboard |
 
 ---
 
@@ -50,6 +51,7 @@ This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`
 - **Database**: MySQL (accessed via [GORM](https://gorm.io/))
 - **Messaging**: RabbitMQ (Event-Driven Architecture)
 - **Caching**: Redis
+- **Observability**: OpenTelemetry, Jaeger
 - **Gateway**: Custom Go-based Reverse Proxy
 
 ## 🌐 Configuration & Networking
@@ -135,12 +137,12 @@ Base URL: `http://localhost:8000`
 - [x] Environment variable configuration (.env)
 
 ### Phase 2: Observability & Monitoring
-- [ ] **Distributed Tracing**: Integrate Jaeger/OpenTelemetry to visualize TraceIDs across services.
+- [x] **Distributed Tracing**: Integrate Jaeger/OpenTelemetry to visualize TraceIDs across services.
 - [ ] **Metrics**: Expose Prometheus metrics (`/metrics`) for request latency, error rates, and queue depth.
 - [ ] **Logging**: Centralized logging (ELK Stack or Loki) to aggregate logs from all containers.
 
 ### Phase 3: CI/CD & Automation
-- [ ] **CI Pipeline**: GitHub Actions to run tests and linting on PRs.
+- [x] **CI Pipeline**: GitHub Actions to run tests and linting on PRs.
 - [ ] **Image Publishing**: Auto-build and push Docker images to Registry (Docker Hub/ECR) on merge.
 
 ### Phase 4: Kubernetes (K8s) Migration
