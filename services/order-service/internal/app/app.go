@@ -23,7 +23,6 @@ import (
 type App struct {
 	Cfg             *config.Config
 	Router          http.Handler
-	Compensator     *service.InventoryCompensator
 	OutboxProcessor *service.OutboxProcessor
 }
 
@@ -50,25 +49,18 @@ func New(cfg *config.Config) (*App, func(), error) {
 	inventoryClient := clients.NewInventoryClient(cfg.InventoryServiceURL)
 	paymentClient := clients.NewPaymentClient(cfg.PaymentServiceURL)
 
-	// 3. MQ
-	mqUser := cfg.MQ.User
-	if mqUser == "" {
-		mqUser = "guest"
+	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.MQ.User, cfg.MQ.Password, cfg.MQ.Host, cfg.MQ.Port)
+	log.Printf("MQ URL: %s", mqURL)
+	messageQueue, err := async.NewRabbitMQ(mqURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
-	mqPass := cfg.MQ.Password
-	if mqPass == "" {
-		mqPass = "guest"
-	}
-
-	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/", mqUser, mqPass, cfg.MQ.Host, cfg.MQ.Port)
-	messageQueue := async.NewRabbitMQOrMemory(mqURL)
 
 	// 4. Core Logic
 	tm := database.NewTransactionManager(db)
 	orderRepo := repository.NewOrderRepository(db)
-	compensator := service.NewInventoryCompensator(inventoryClient, messageQueue)
 	outboxProcessor := service.NewOutboxProcessor(orderRepo, messageQueue)
-	orderService := service.NewOrderService(orderRepo, inventoryClient, paymentClient, compensator, tm)
+	orderService := service.NewOrderService(orderRepo, inventoryClient, paymentClient, tm)
 	orderHandler := handler.NewOrderHandler(orderService)
 
 	// 5. Router
@@ -93,14 +85,12 @@ func New(cfg *config.Config) (*App, func(), error) {
 	return &App{
 		Cfg:             cfg,
 		Router:          r,
-		Compensator:     compensator,
 		OutboxProcessor: outboxProcessor,
 	}, cleanup, nil
 }
 
 func (a *App) Run() error {
 	// Start background workers
-	a.Compensator.StartWorker()
 	a.OutboxProcessor.Start()
 
 	addr := fmt.Sprintf(":%d", a.Cfg.ServerPort)

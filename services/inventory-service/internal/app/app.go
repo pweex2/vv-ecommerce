@@ -12,14 +12,13 @@ import (
 
 	"inventory-service/internal/config"
 	"inventory-service/internal/handler"
-	"inventory-service/internal/model"
 	"inventory-service/internal/repository"
 	"inventory-service/internal/router"
 	"inventory-service/internal/service"
+	"vv-ecommerce/pkg/async"
 	"vv-ecommerce/pkg/database"
 	"vv-ecommerce/pkg/trace"
 
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -37,16 +36,15 @@ func New(cfg *config.Config) (*App, func(), error) {
 	}
 
 	// 1. Database
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := database.NewMySQLConnection(database.Config{
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		DBName:   cfg.Database.DBName,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Auto Migrate
-	if err := db.AutoMigrate(&model.Inventory{}, &model.InventoryDeductionLog{}); err != nil {
-		return nil, nil, fmt.Errorf("failed to auto migrate: %w", err)
 	}
 
 	// 2. Core Logic
@@ -55,12 +53,30 @@ func New(cfg *config.Config) (*App, func(), error) {
 	inventoryService := service.NewInventoryService(inventoryRepo, tm)
 	inventoryHandler := handler.NewInventoryHandler(inventoryService)
 
+	// 2.5 Async Messaging (RabbitMQ)
+	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
+		cfg.MQ.User, cfg.MQ.Password, cfg.MQ.Host, cfg.MQ.Port)
+	log.Printf("MQ URL: %s", mqURL)
+	mq, err := async.NewRabbitMQ(mqURL)
+	if err != nil {
+		log.Printf("Failed to connect to RabbitMQ: %v. Async features disabled.", err)
+	} else {
+		// Initialize Async Handler
+		eventHandler := handler.NewEventHandler(inventoryService, mq)
+		if err := eventHandler.RegisterSubscribers(); err != nil {
+			log.Printf("Failed to register subscribers: %v", err)
+		}
+	}
+
 	// 3. Router
 	r := router.NewRouter(inventoryHandler)
 
 	// Cleanup function
 	cleanup := func() {
 		log.Println("Cleaning up application resources...")
+		if mq != nil {
+			mq.Close()
+		}
 		sqlDB, err := db.DB()
 		if err != nil {
 			log.Printf("Error getting sql.DB from gorm: %v", err)

@@ -34,7 +34,7 @@ func NewRabbitMQ(url string) (*RabbitMQ, error) {
 	}, nil
 }
 
-func (r *RabbitMQ) Publish(topic string, payload []byte) error {
+func (r *RabbitMQ) Publish(topic string, payload []byte, traceHeaders map[string]string) error {
 	// Declare the queue to ensure it exists
 	q, err := r.channel.QueueDeclare(
 		topic, // name
@@ -48,6 +48,12 @@ func (r *RabbitMQ) Publish(topic string, payload []byte) error {
 		return fmt.Errorf("failed to declare queue: %w", err)
 	}
 
+	// Convert map[string]string to amqp.Table
+	headers := amqp.Table{}
+	for k, v := range traceHeaders {
+		headers[k] = v
+	}
+
 	err = r.channel.Publish(
 		"",     // exchange
 		q.Name, // routing key
@@ -57,6 +63,7 @@ func (r *RabbitMQ) Publish(topic string, payload []byte) error {
 			ContentType:  "application/json",
 			Body:         payload,
 			DeliveryMode: amqp.Persistent, // Make message persistent
+			Headers:      headers,
 		})
 	if err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
@@ -64,7 +71,7 @@ func (r *RabbitMQ) Publish(topic string, payload []byte) error {
 	return nil
 }
 
-func (r *RabbitMQ) Subscribe(topic string, handler func(payload []byte) error) error {
+func (r *RabbitMQ) Subscribe(topic string, handler func(payload []byte, traceHeaders map[string]string) error) error {
 	// Declare the queue
 	q, err := r.channel.QueueDeclare(
 		topic, // name
@@ -93,8 +100,18 @@ func (r *RabbitMQ) Subscribe(topic string, handler func(payload []byte) error) e
 
 	go func() {
 		for d := range msgs {
+			// Extract headers
+			traceHeaders := make(map[string]string)
+			if d.Headers != nil {
+				for k, v := range d.Headers {
+					if val, ok := v.(string); ok {
+						traceHeaders[k] = val
+					}
+				}
+			}
+
 			// Call handler
-			err := handler(d.Body)
+			err := handler(d.Body, traceHeaders)
 			if err != nil {
 				// Requeue logic or Dead Letter Queue could be here
 				log.Printf("Error processing message: %v", err)

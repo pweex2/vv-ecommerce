@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/datatypes"
 )
 
@@ -28,17 +29,22 @@ type OrderService struct {
 	repo            repository.OrderRepository
 	inventoryClient *clients.InventoryClient
 	paymentClient   *clients.PaymentClient
-	compensator     *InventoryCompensator
 	tm              database.TransactionManager
 }
 
-func NewOrderService(repo repository.OrderRepository, inventoryClient *clients.InventoryClient, paymentClient *clients.PaymentClient, compensator *InventoryCompensator, tm database.TransactionManager) *OrderService {
-	return &OrderService{repo: repo, inventoryClient: inventoryClient, paymentClient: paymentClient, compensator: compensator, tm: tm}
+func NewOrderService(repo repository.OrderRepository, inventoryClient *clients.InventoryClient, paymentClient *clients.PaymentClient, tm database.TransactionManager) *OrderService {
+	return &OrderService{repo: repo, inventoryClient: inventoryClient, paymentClient: paymentClient, tm: tm}
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, userID int64, quantity int64, price int64, sku string) (*model.Order, error) {
 	orderID := uuid.New().String()
-	traceID := uuid.New().String()
+
+	// Use OTEL TraceID if available, otherwise generate a new UUID
+	traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
+	if traceID == "00000000000000000000000000000000" {
+		traceID = uuid.New().String()
+	}
+
 	reqID := uuid.New().String()
 	var err error
 

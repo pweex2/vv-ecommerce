@@ -13,5 +13,7 @@ Redis:
   Password: ""
   DB: 0
 MQ:
-  Host: localhost
+  Host: 127.0.0.1
   Port: "5672"
+  User: user
+  Password: password

@@ -99,6 +99,8 @@ services:
       - REDIS_ADDR=${REDIS_HOST}:6379
       - MQ_HOST=${MQ_HOST}
       - MQ_PORT=5672
+      - MQ_USER=${MQ_USER}
+      - MQ_PASSWORD=${MQ_PASSWORD}
       - INVENTORY_SERVICE_URL=http://inventory-service:${INVENTORY_SERVICE_PORT}
       - PAYMENT_SERVICE_URL=http://payment-service:${PAYMENT_SERVICE_PORT}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
@@ -133,6 +135,10 @@ services:
       - DATABASE_DBNAME=inventory_db
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=6379
+      - MQ_HOST=${MQ_HOST}
+      - MQ_PORT=5672
+      - MQ_USER=${MQ_USER}
+      - MQ_PASSWORD=${MQ_PASSWORD}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       mysql:

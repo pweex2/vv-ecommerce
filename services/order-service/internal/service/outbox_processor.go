@@ -9,13 +9,17 @@ import (
 	"time"
 
 	"vv-ecommerce/pkg/async"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type OutboxProcessor struct {
-	repo        repository.OrderRepository
-	queue       async.MessageQueue
-	interval    time.Duration
-	stopChan    chan struct{}
+	repo     repository.OrderRepository
+	queue    async.MessageQueue
+	interval time.Duration
+	stopChan chan struct{}
 }
 
 func NewOutboxProcessor(repo repository.OrderRepository, queue async.MessageQueue) *OutboxProcessor {
@@ -95,11 +99,47 @@ func (p *OutboxProcessor) publishInventoryRollback(ctx context.Context, event mo
 		return err
 	}
 
+	// Extract TraceID from event (preferred) or payload
+	traceID := event.TraceID
+	if traceID == "" {
+		traceID = payload.TraceID
+	}
+
+	// Prepare trace headers
+	traceHeaders := make(map[string]string)
+
+	// Attempt to reconstruct trace context
+	if len(traceID) == 32 { // Valid OTEL TraceID length
+		tid, err := trace.TraceIDFromHex(traceID)
+		if err == nil {
+			// We have the TraceID from the database (persisted from the original request),
+			// but we lost the parent SpanID because it wasn't stored.
+			// To maintain trace continuity in Jaeger, we construct a RemoteSpanContext
+			// using the persisted TraceID and a generated "dummy" SpanID.
+			// This makes the consumer's span appear as a child of this dummy span,
+			// linking it to the original trace.
+			dummySpanID := [8]byte{1, 2, 3, 4, 5, 6, 7, 8} // Deterministic dummy parent ID
+
+			sc := trace.NewSpanContext(trace.SpanContextConfig{
+				TraceID:    tid,
+				SpanID:     dummySpanID,
+				TraceFlags: trace.FlagsSampled,
+				Remote:     true,
+			})
+
+			// Create a context with this remote span context
+			ctxWithSpan := trace.ContextWithRemoteSpanContext(ctx, sc)
+
+			// Inject into headers for propagation
+			otel.GetTextMapPropagator().Inject(ctxWithSpan, propagation.MapCarrier(traceHeaders))
+		}
+	}
+
 	// Construct message for MQ
 	message := map[string]interface{}{
 		"sku":      payload.SKU,
 		"quantity": payload.Quantity,
-		"trace_id": payload.TraceID,
+		"trace_id": traceID,
 	}
 
 	messageBytes, err := json.Marshal(message)
@@ -107,6 +147,6 @@ func (p *OutboxProcessor) publishInventoryRollback(ctx context.Context, event mo
 		return err
 	}
 
-	// Publish to RabbitMQ
-	return p.queue.Publish("inventory_rollback", messageBytes)
+	// Publish to RabbitMQ with headers
+	return p.queue.Publish("inventory_rollback", messageBytes, traceHeaders)
 }
