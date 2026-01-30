@@ -56,16 +56,15 @@ func New(cfg *config.Config) (*App, func(), error) {
 	// 2.5 Async Messaging (RabbitMQ)
 	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
 		cfg.MQ.User, cfg.MQ.Password, cfg.MQ.Host, cfg.MQ.Port)
-	log.Printf("MQ URL: %s", mqURL)
 	mq, err := async.NewRabbitMQ(mqURL)
 	if err != nil {
-		log.Printf("Failed to connect to RabbitMQ: %v. Async features disabled.", err)
-	} else {
-		// Initialize Async Handler
-		eventHandler := handler.NewEventHandler(inventoryService, mq)
-		if err := eventHandler.RegisterSubscribers(); err != nil {
-			log.Printf("Failed to register subscribers: %v", err)
-		}
+		return nil, nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	}
+
+	// Initialize Async Handler
+	eventHandler := handler.NewEventHandler(inventoryService, mq)
+	if err := eventHandler.RegisterSubscribers(); err != nil {
+		return nil, nil, fmt.Errorf("failed to register subscribers: %w", err)
 	}
 
 	// 3. Router

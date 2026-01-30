@@ -50,7 +50,6 @@ func New(cfg *config.Config) (*App, func(), error) {
 	paymentClient := clients.NewPaymentClient(cfg.PaymentServiceURL)
 
 	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.MQ.User, cfg.MQ.Password, cfg.MQ.Host, cfg.MQ.Port)
-	log.Printf("MQ URL: %s", mqURL)
 	messageQueue, err := async.NewRabbitMQ(mqURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
