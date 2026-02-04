@@ -1,6 +1,19 @@
-# VV-Ecommerce
+# VV-Ecommerce: High-Concurrency Microservices Backend
 
-A lightweight, microservices-based e-commerce backend system built with **Go** and the **Gin** framework.
+An industrial-grade e-commerce backend system engineered with **Go**, **Gin**, and **Microservices Architecture**. 
+
+This project demonstrates a production-ready approach to solving **Distributed Data Consistency**, **High Concurrency**, and **Full-Link Observability**.
+
+## ✨ Key Features & Engineering Highlights
+
+*   **Microservices Architecture**: Decoupled services (Order, Inventory, Payment, Gateway) communicating via RESTful APIs and asynchronous messaging.
+*   **Distributed Transactions**: Implemented **Saga Pattern** and **Transactional Outbox Pattern** to ensure eventual consistency, solving the classic "Dual-Write" problem between Database and Message Queue.
+*   **Observability**: End-to-end distributed tracing using **OpenTelemetry (OTel)** and **Jaeger**.
+*   **High Reliability**:
+    *   **Idempotent Consumers**: Prevents duplicate processing of messages.
+    *   **Smart Retry**: Exponential backoff strategies for transient failures.
+    *   **Concurrency Safety**: Optimized Outbox Processor using **MySQL `FOR UPDATE SKIP LOCKED`** to support horizontal scaling without race conditions.
+*   **DevOps Ready**: Fully containerized with **Docker Compose** and automated CI/CD pipelines via **GitHub Actions**.
 
 ## 🐳 Quick Start (Docker) - Recommended
 
