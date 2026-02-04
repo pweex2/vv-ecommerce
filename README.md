@@ -1,8 +1,8 @@
 # VV-Ecommerce: High-Concurrency Microservices Backend
 
-An industrial-grade e-commerce backend system engineered with **Go**, **Gin**, and **Microservices Architecture**. 
+An advanced learning project for e-commerce backend system engineered with **Go**, **Gin**, and **Microservices Architecture**. 
 
-This project demonstrates a production-ready approach to solving **Distributed Data Consistency**, **High Concurrency**, and **Full-Link Observability**.
+This project explores industry-standard patterns for solving **Distributed Data Consistency**, **High Concurrency**, and **Full-Link Observability**.
 
 ## ✨ Key Features & Engineering Highlights
 
