@@ -55,8 +55,12 @@ func (p *OutboxProcessor) Stop() {
 func (p *OutboxProcessor) processEvents() {
 	ctx := context.Background() // Should ideally have a timeout
 
-	// 1. Fetch pending events
-	events, err := p.repo.GetPendingOutboxEvents(ctx, 10) // Batch size 10
+	// 1. Fetch pending events with lock (SKIP LOCKED)
+	// We use a timeout to prevent hanging DB connections
+	fetchCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	events, err := p.repo.FetchAndLockPendingEvents(fetchCtx, 10) // Batch size 10
 	if err != nil {
 		log.Printf("Error fetching outbox events: %v", err)
 		return
@@ -68,21 +72,35 @@ func (p *OutboxProcessor) processEvents() {
 
 	for _, event := range events {
 		// 2. Process based on EventType
+		var processErr error
 		switch event.EventType {
 		case "InventoryRollback":
-			if err := p.publishInventoryRollback(ctx, event); err != nil {
-				log.Printf("Error processing event %d: %v", event.ID, err)
-				// Retry strategy? For now, leave as PENDING to be picked up again.
-				// In production, might want backoff or FAILED status after N attempts.
-			} else {
-				// 3. Mark as PROCESSED
-				if err := p.repo.UpdateOutboxEventStatus(ctx, event.ID, model.OutboxStatusProcessed); err != nil {
-					log.Printf("Error updating event status %d: %v", event.ID, err)
-				}
-			}
+			processErr = p.publishInventoryRollback(ctx, event)
 		default:
 			log.Printf("Unknown event type: %s", event.EventType)
-			p.repo.UpdateOutboxEventStatus(ctx, event.ID, model.OutboxStatusFailed)
+			// Mark as FAILED immediately for unknown types
+			p.repo.UpdateOutboxEventStatus(ctx, event.ID, model.OutboxStatusFailed, "Unknown event type")
+			continue
+		}
+
+		if processErr != nil {
+			log.Printf("Error processing event %d (Attempt %d): %v", event.ID, event.RetryCount+1, processErr)
+			
+			// Max retries logic (e.g., 3 times)
+			const maxRetries = 3
+			if event.RetryCount >= maxRetries {
+				log.Printf("Event %d reached max retries, marking as FAILED", event.ID)
+				p.repo.UpdateOutboxEventStatus(ctx, event.ID, model.OutboxStatusFailed, processErr.Error())
+			} else {
+				// Increment retry count and keep as PENDING (or ideally, set a 'NextRetryAt' time)
+				// For now, simple increment.
+				p.repo.IncrementRetryCount(ctx, event.ID, processErr.Error())
+			}
+		} else {
+			// 3. Mark as PROCESSED
+			if err := p.repo.UpdateOutboxEventStatus(ctx, event.ID, model.OutboxStatusProcessed, ""); err != nil {
+				log.Printf("Error updating event status %d: %v", event.ID, err)
+			}
 		}
 	}
 }
