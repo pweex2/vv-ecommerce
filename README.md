@@ -61,6 +61,7 @@ This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`
 ### Tech Stack
 - **Language**: Go 1.25+
 - **Web Framework**: [Gin](https://github.com/gin-gonic/gin)
+- **RPC Framework**: gRPC (Internal Communication) - *In Progress*
 - **Database**: MySQL (accessed via [GORM](https://gorm.io/))
 - **Messaging**: RabbitMQ (Event-Driven Architecture)
 - **Caching**: Redis
@@ -81,12 +82,12 @@ This project handles different environments using **Environment Variables** (`.e
 
 This project implements the **Saga Pattern (Orchestration-based)** and **Transactional Outbox Pattern** to ensure data consistency across microservices.
 
-### The "Order Creation" Saga
-1. **Order Service**: Creates an order in `PENDING` state and writes an event to the `outbox_events` table (in the same DB transaction).
-2. **Outbox Processor**: Asynchronously reads from `outbox_events` and publishes messages to **RabbitMQ**.
-3. **Inventory Service**: Consumes message, deducts stock.
-4. **Payment Service**: Consumes message, processes payment.
-5. **Compensation**: If any step fails, compensating events are triggered to rollback changes (e.g., restore stock).
+### The "Order Creation" Flow (Hybrid Saga)
+1. **Order Service**: Creates an order in `PENDING` state.
+2. **Synchronous Execution**: Calls **Inventory Service** (Deduct) and **Payment Service** (Process) via HTTP to provide immediate feedback.
+3. **Failure Handling**: If any step fails, the Order status is updated to `FAILED`.
+4. **Async Compensation (Outbox)**: If Inventory was deducted but Payment failed, an `InventoryRollback` event is written to `outbox_events`.
+5. **Outbox Processor**: Asynchronously publishes rollback events to **RabbitMQ** to ensure eventual consistency (Inventory Restoration).
 
 ## 🛡️ Standardized Error Handling
 
@@ -225,4 +226,20 @@ This section outlines the gap analysis and planned improvements to transform thi
 ### Phase 5: Security & Resilience
 - [ ] **API Gateway Auth**: Implement JWT validation at the Gateway level.
 - [ ] **Rate Limiting**: Protect services using Redis-based rate limiting in the Gateway.
-- [ ] **Circuit Breaking**: Enhance clients with Hystrix/Resilience4j patterns.
+- [x] **Circuit Breaking**: Implemented using [sony/gobreaker](https://github.com/sony/gobreaker) in `pkg/clients` to prevent cascading failures.
+
+## 📚 Learning Gap Filling Plan (Roadmap to Senior Engineer)
+
+### 1. Quality Assurance & Testing Strategy
+- [ ] **Unit Testing**: Increase coverage for core logic (Order Service, Payment Calculation) using `testify`.
+- [ ] **Integration Testing**: Test database interactions and service flows using `dockertest`.
+- [ ] **Chaos Engineering**: Introduce random failures (latency, errors) to test system resilience.
+
+### 2. High-Scale Data Handling
+- [ ] **Fully Async Saga**: Refactor "Order Creation" to be fully event-driven (Fire-and-Forget) for higher throughput.
+- [ ] **Database Sharding**: Implement application-level sharding for `orders` table based on `user_id`.
+- [ ] **Read/Write Splitting**: Configure GORM to use Read Replicas for `GET` requests.
+
+### 3. Fintech Specifics
+- [ ] **Reconciliation System (对账)**: Create a daily job to verify Order vs Payment vs Bank records.
+- [ ] **Double-Entry Bookkeeping**: Refactor `wallet` service to use immutable ledger entries instead of simple balance updates.

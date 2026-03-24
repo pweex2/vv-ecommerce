@@ -46,7 +46,7 @@ func New(cfg *config.Config) (*App, func(), error) {
 	}
 
 	// 2. Clients
-	inventoryClient := clients.NewInventoryClient(cfg.InventoryServiceURL)
+	inventoryClient := clients.NewInventoryClient(cfg.InventoryServiceURL, cfg.InventoryServiceGRPCHost)
 	paymentClient := clients.NewPaymentClient(cfg.PaymentServiceURL)
 
 	mqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.MQ.User, cfg.MQ.Password, cfg.MQ.Host, cfg.MQ.Port)
@@ -70,6 +70,9 @@ func New(cfg *config.Config) (*App, func(), error) {
 	// Cleanup function
 	cleanup := func() {
 		log.Println("Cleaning up application resources...")
+		// Close Clients
+		inventoryClient.Close()
+
 		outboxProcessor.Stop() // Stop outbox processor
 		if err := messageQueue.Close(); err != nil {
 			log.Printf("Error closing message queue: %v", err)

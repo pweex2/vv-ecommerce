@@ -7,20 +7,49 @@ import (
 	"net/http"
 	"time"
 
+	pb "vv-ecommerce/pkg/proto/inventory"
+
 	"github.com/sony/gobreaker"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type InventoryClient struct {
-	baseURL string
-	client  *http.Client
-	cb      *gobreaker.CircuitBreaker
+	baseURL    string
+	grpcTarget string
+	client     *http.Client
+	grpcConn   *grpc.ClientConn
+	grpcClient pb.InventoryServiceClient
+	cb         *gobreaker.CircuitBreaker
 }
 
-func NewInventoryClient(url string) *InventoryClient {
+func NewInventoryClient(url string, grpcTarget string) *InventoryClient {
+	// Initialize gRPC connection (Lazy connection)
+	// In production, you might want to manage this connection lifecycle more carefully
+	var conn *grpc.ClientConn
+	var grpcClient pb.InventoryServiceClient
+	var err error
+
+	if grpcTarget != "" {
+		conn, err = grpc.NewClient(grpcTarget, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err == nil {
+			grpcClient = pb.NewInventoryServiceClient(conn)
+		}
+	}
+
 	return &InventoryClient{
-		baseURL: url,
-		client:  NewHTTPClient(2 * time.Second),
-		cb:      NewCircuitBreaker("inventory-service"),
+		baseURL:    url,
+		grpcTarget: grpcTarget,
+		client:     NewHTTPClient(2 * time.Second),
+		grpcConn:   conn,
+		grpcClient: grpcClient,
+		cb:         NewCircuitBreaker("inventory-service"),
+	}
+}
+
+func (c *InventoryClient) Close() {
+	if c.grpcConn != nil {
+		c.grpcConn.Close()
 	}
 }
 
@@ -97,6 +126,35 @@ func (c *InventoryClient) Rollback(ctx context.Context, sku string, qty int64, t
 }
 
 func (c *InventoryClient) Decrease(ctx context.Context, sku, reqID, orderID, traceID string, qty int64) error {
+	// Try gRPC first if available
+	if c.grpcClient != nil {
+		_, err := c.cb.Execute(func() (interface{}, error) {
+			req := &pb.DecreaseStockRequest{
+				Sku:       sku,
+				Quantity:  qty,
+				RequestId: reqID,
+				OrderId:   orderID,
+				TraceId:   traceID,
+			}
+			resp, err := c.grpcClient.DecreaseStock(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			if !resp.Success {
+				return nil, WrapClientError(nil, resp.Message)
+			}
+			return resp, nil
+		})
+		if err == nil {
+			return nil
+		}
+		// If gRPC fails, we could fallback to HTTP, or just return error.
+		// For this migration, let's stick to gRPC error if configured.
+		// To be robust, we return the error here.
+		return err
+	}
+
+	// Fallback to HTTP (Old Logic)
 	body, _ := json.Marshal(map[string]interface{}{
 		"sku":        sku,
 		"quantity":   qty,
