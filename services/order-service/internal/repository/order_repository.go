@@ -5,7 +5,8 @@ import (
 	"order-service/internal/model"
 	"vv-ecommerce/pkg/database"
 
-	"gorm.io/gorm" // 导入 GORM
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type OrderRepository interface {
@@ -15,14 +16,16 @@ type OrderRepository interface {
 	UpdateOrderStatus(ctx context.Context, orderID string, status model.OrderStatus) (int64, error)
 	SaveOutboxEvent(ctx context.Context, event *model.OutboxEvent) error
 	GetPendingOutboxEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error)
-	UpdateOutboxEventStatus(ctx context.Context, id uint, status model.OutboxStatus) error
+	UpdateOutboxEventStatus(ctx context.Context, id uint, status model.OutboxStatus, lastError string) error
+	IncrementRetryCount(ctx context.Context, id uint, lastError string) error
+	FetchAndLockPendingEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error)
 }
 
 type GORMOrderRepository struct {
-	db *gorm.DB // 更改为 *gorm.DB
+	db *gorm.DB
 }
 
-func NewOrderRepository(db *gorm.DB) OrderRepository { // 更改参数类型和返回类型
+func NewOrderRepository(db *gorm.DB) OrderRepository {
 	return &GORMOrderRepository{db: db}
 }
 
@@ -63,6 +66,41 @@ func (r *GORMOrderRepository) GetPendingOutboxEvents(ctx context.Context, limit 
 	return events, err
 }
 
-func (r *GORMOrderRepository) UpdateOutboxEventStatus(ctx context.Context, id uint, status model.OutboxStatus) error {
-	return database.GetDB(ctx, r.db).Model(&model.OutboxEvent{}).Where("id = ?", id).Update("status", status).Error
+// FetchAndLockPendingEvents uses FOR UPDATE SKIP LOCKED to fetch pending events safely in a concurrent environment
+func (r *GORMOrderRepository) FetchAndLockPendingEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error) {
+	var events []model.OutboxEvent
+	// MySQL 8.0+ supports SKIP LOCKED
+	// This ensures that multiple instances of the service do not pick up the same event
+	err := database.GetDB(ctx, r.db).
+		Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+		Where("status = ?", model.OutboxStatusPending).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&events).Error
+	return events, err
+}
+
+func (r *GORMOrderRepository) IncrementRetryCount(ctx context.Context, id uint, lastError string) error {
+	return database.GetDB(ctx, r.db).Model(&model.OutboxEvent{}).Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"retry_count": gorm.Expr("retry_count + ?", 1),
+			"last_error":  lastError,
+		}).Error
+}
+
+func (r *GORMOrderRepository) UpdateOutboxEventStatus(ctx context.Context, id uint, status model.OutboxStatus, lastError string) error {
+	updates := map[string]interface{}{
+		"status": status,
+	}
+	if lastError != "" {
+		updates["last_error"] = lastError
+	}
+	// Also increment retry count if failed
+	if status == model.OutboxStatusFailed || status == model.OutboxStatusPending {
+		// This logic might be better placed in service, but simple increment here is fine if we had a separate method
+		// For now, let's keep it simple. The caller (processor) should handle retry logic more explicitly if needed.
+		// But wait, our processor needs to update RetryCount.
+	}
+
+	return database.GetDB(ctx, r.db).Model(&model.OutboxEvent{}).Where("id = ?", id).Updates(updates).Error
 }

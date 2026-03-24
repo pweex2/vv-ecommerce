@@ -11,8 +11,41 @@ import (
 	"vv-ecommerce/pkg/common/apperror"
 	"vv-ecommerce/pkg/common/response"
 
+	"github.com/sony/gobreaker"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+// NewCircuitBreaker creates a standard circuit breaker with given name
+func NewCircuitBreaker(name string) *gobreaker.CircuitBreaker {
+	st := gobreaker.Settings{
+		Name:        name,
+		MaxRequests: 1, // Half-open state allows 1 request
+		Interval:    0, // Do not clear counts automatically
+		Timeout:     30 * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			// Trip if 5 consecutive failures
+			return counts.ConsecutiveFailures >= 5
+		},
+		IsSuccessful: func(err error) bool {
+			// 4xx errors should not trip the circuit breaker
+			if err == nil {
+				return true
+			}
+			var appErr *apperror.AppError
+			if errors.As(err, &appErr) {
+				if appErr.Code >= 400 && appErr.Code < 500 {
+					return true
+				}
+			}
+			return false
+		},
+		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
+			// In production, we should log this event or emit metrics
+			fmt.Printf("CircuitBreaker '%s' changed state from %s to %s\n", name, from, to)
+		},
+	}
+	return gobreaker.NewCircuitBreaker(st)
+}
 
 // NewHTTPClient returns an http.Client with OpenTelemetry instrumentation
 func NewHTTPClient(timeout time.Duration) *http.Client {

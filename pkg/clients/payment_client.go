@@ -8,17 +8,21 @@ import (
 	"net/http"
 	"time"
 	"vv-ecommerce/pkg/common/apperror"
+
+	"github.com/sony/gobreaker"
 )
 
 type PaymentClient struct {
 	baseURL string
 	client  *http.Client
+	cb      *gobreaker.CircuitBreaker
 }
 
 func NewPaymentClient(url string) *PaymentClient {
 	return &PaymentClient{
 		baseURL: url,
 		client:  NewHTTPClient(5 * time.Second),
+		cb:      NewCircuitBreaker("payment-service"),
 	}
 }
 
@@ -44,57 +48,71 @@ func (c *PaymentClient) ProcessPayment(ctx context.Context, orderID string, amou
 	}
 	body, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments", bytes.NewBuffer(body))
+	// Execute with circuit breaker
+	res, err := c.cb.Execute(func() (interface{}, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments", bytes.NewBuffer(body))
+		if err != nil {
+			return nil, WrapClientError(err, "failed to create request")
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if traceID != "" {
+			req.Header.Set("X-Trace-ID", traceID)
+		}
+
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return nil, WrapClientError(err, "failed to call payment service")
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, HandleHTTPError(resp)
+		}
+
+		var paymentResp PaymentResponse
+		if err := json.NewDecoder(resp.Body).Decode(&paymentResp); err != nil {
+			return nil, apperror.Internal("failed to decode payment response", err)
+		}
+
+		return &paymentResp, nil
+	})
+
 	if err != nil {
-		return nil, WrapClientError(err, "failed to create request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if traceID != "" {
-		req.Header.Set("X-Trace-ID", traceID)
+		return nil, err
 	}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, WrapClientError(err, "failed to call payment service")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, HandleHTTPError(resp)
-	}
-
-	var paymentResp PaymentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&paymentResp); err != nil {
-		return nil, apperror.Internal("failed to decode payment response", err)
-	}
-
-	return &paymentResp, nil
+	return res.(*PaymentResponse), nil
 }
 
 func (c *PaymentClient) Refund(ctx context.Context, orderID string, traceID string) error {
 	reqBody := map[string]string{"order_id": orderID}
 	body, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments/refund", bytes.NewBuffer(body))
-	if err != nil {
-		return WrapClientError(err, "failed to create request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if traceID != "" {
-		req.Header.Set("X-Trace-ID", traceID)
-	}
+	// Execute with circuit breaker
+	_, err := c.cb.Execute(func() (interface{}, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments/refund", bytes.NewBuffer(body))
+		if err != nil {
+			return nil, WrapClientError(err, "failed to create request")
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if traceID != "" {
+			req.Header.Set("X-Trace-ID", traceID)
+		}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return WrapClientError(err, "failed to call payment service")
-	}
-	defer resp.Body.Close()
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return nil, WrapClientError(err, "failed to call payment service")
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return HandleHTTPError(resp)
-	}
+		if resp.StatusCode != http.StatusOK {
+			return nil, HandleHTTPError(resp)
+		}
 
-	return nil
+		return nil, nil
+	})
+
+	return err
 }
 
 func (c *PaymentClient) GetPayment(orderID string) (*PaymentResponse, error) {

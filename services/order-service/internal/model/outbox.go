@@ -22,6 +22,8 @@ type OutboxEvent struct {
 	Payload       datatypes.JSON `gorm:"type:json;not null"`
 	Status        OutboxStatus   `gorm:"size:50;default:'PENDING';index"`
 	TraceID       string         `gorm:"size:255"`
+	RetryCount    int            `gorm:"default:0"`
+	LastError     string         `gorm:"type:text"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

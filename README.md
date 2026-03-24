@@ -61,6 +61,7 @@ This project adopts a **Monorepo** structure managed by Go Workspaces (`go.work`
 ### Tech Stack
 - **Language**: Go 1.25+
 - **Web Framework**: [Gin](https://github.com/gin-gonic/gin)
+- **RPC Framework**: gRPC (Internal Communication) - *In Progress*
 - **Database**: MySQL (accessed via [GORM](https://gorm.io/))
 - **Messaging**: RabbitMQ (Event-Driven Architecture)
 - **Caching**: Redis
@@ -81,12 +82,12 @@ This project handles different environments using **Environment Variables** (`.e
 
 This project implements the **Saga Pattern (Orchestration-based)** and **Transactional Outbox Pattern** to ensure data consistency across microservices.
 
-### The "Order Creation" Saga
-1. **Order Service**: Creates an order in `PENDING` state and writes an event to the `outbox_events` table (in the same DB transaction).
-2. **Outbox Processor**: Asynchronously reads from `outbox_events` and publishes messages to **RabbitMQ**.
-3. **Inventory Service**: Consumes message, deducts stock.
-4. **Payment Service**: Consumes message, processes payment.
-5. **Compensation**: If any step fails, compensating events are triggered to rollback changes (e.g., restore stock).
+### The "Order Creation" Flow (Hybrid Saga)
+1. **Order Service**: Creates an order in `PENDING` state.
+2. **Synchronous Execution**: Calls **Inventory Service** (Deduct) and **Payment Service** (Process) via HTTP to provide immediate feedback.
+3. **Failure Handling**: If any step fails, the Order status is updated to `FAILED`.
+4. **Async Compensation (Outbox)**: If Inventory was deducted but Payment failed, an `InventoryRollback` event is written to `outbox_events`.
+5. **Outbox Processor**: Asynchronously publishes rollback events to **RabbitMQ** to ensure eventual consistency (Inventory Restoration).
 
 ## 🛡️ Standardized Error Handling
 
@@ -142,7 +143,66 @@ Base URL: `http://localhost:8000`
 
 ---
 
+## 💡 Architecture Decisions (The "Why")
+
+*Common Interview Questions & Answers based on this architecture:*
+
+### 1. Why Saga Pattern instead of 2PC (Two-Phase Commit)?
+*   **Trade-off**: We prioritized **Availability** and **Performance** over Strong Consistency.
+*   **Reasoning**: 2PC locks resources across services (Order, Inventory, Payment), causing high latency and "Blocking" if one service fails. Saga (Orchestration) allows local transactions to commit immediately, using **Compensating Transactions** (Rollbacks) to handle failures eventually.
+
+### 2. Why RabbitMQ over Kafka?
+*   **Trade-off**: We prioritized **Reliability** and **Complex Routing** over Extreme Throughput.
+*   **Reasoning**:
+    *   **Reliability**: RabbitMQ's Confirm/Ack mechanism ensures zero message loss (critical for Financial/Inventory data).
+    *   **Routing**: We need features like **Dead Letter Queues (DLQ)** and **Delay Queues** (for Order Timeout cancellation), which RabbitMQ supports natively. Kafka is better for log streaming/analytics, not transactional messaging.
+
+### 3. Why Optimistic Locking (`version` field) vs Pessimistic Locking (`SELECT FOR UPDATE`)?
+*   **Trade-off**: We prioritized **Throughput** over Conflict Prevention.
+*   **Reasoning**: In e-commerce, reading stock is frequent, but writing (buying) is less frequent. Pessimistic locking blocks all readers, killing performance. Optimistic locking allows high concurrency, failing only when the write actually conflicts (using `CAS` or `WHERE version = old_version`).
+    *   *Note*: For the Outbox Processor, we DO use `FOR UPDATE SKIP LOCKED` (Pessimistic) because that is a specific "Job Queue" pattern where we strictly need to prevent multiple consumers from processing the same event.
+
+---
+
 ## 🗺️ Deployment & Production Roadmap
+
+### 📚 Learning Roadmap: From Junior to Senior
+
+This section outlines the gap analysis and planned improvements to transform this project from a "functional demo" to a "production-grade financial system".
+
+#### 1. Reliability Engineering (The "Dirty Work")
+- [ ] **Circuit Breaker**: Implement `Hystrix` or `Resilience4j` patterns to prevent cascading failures when downstream services (e.g., Payment Gateway) are slow.
+- [ ] **Rate Limiting**: Protect APIs using Token Bucket or Leaky Bucket algorithms (Redis-based) to handle traffic spikes.
+- [ ] **Dead Letter Queues (DLQ)**: Handle poison pill messages that exceed max retries, ensuring they don't block the queue.
+- [ ] **Graceful Shutdown**: Ensure all in-flight requests and DB connections are closed properly on SIGTERM.
+
+#### 2. Quality Assurance & Testing (Critical Gap)
+- [ ] **Unit Tests**: Add `*_test.go` for all Domain Services (Order, Inventory, Payment) with >80% coverage. Use `stretchr/testify` for assertions and `vektra/mockery` for mocking interfaces.
+- [ ] **Integration Tests**: Test the full Saga flow (Order -> Inventory -> Payment) using Docker Compose and a real DB/MQ.
+- [ ] **Error Handling Refactor**: Replace string-based errors (`errors.New("text")`) with **Sentinel Errors** (typed errors) to allow robust error checking (`errors.Is()`).
+
+#### 3. Performance Optimization
+- [ ] **Database Sharding**: Move from single DB to horizontal sharding (e.g., by `UserID` or `OrderID`) to support millions of rows.
+- [ ] **Multi-Level Caching**: Implement Local Cache (Go map) + Remote Cache (Redis) to prevent "Hot Key" issues and Cache Penetration.
+- [ ] **Connection Pooling**: Tune DB and Redis connection pools (MaxOpenConns, MaxIdleConns) based on load testing.
+- [ ] **Go Profiling (pprof)**: Integrate `net/http/pprof` to visualize Goroutine leaks, Memory allocations, and CPU hotspots under load.
+
+#### 4. Fintech Domain Knowledge (The "Money" Part)
+- [ ] **Reconciliation (对账)**: Implement a daily batch job to verify internal `Payment` records against external Gateway reports (Mocked CSV).
+- [ ] **Idempotency Keys**: Enforce strict idempotency on critical Payment APIs using Redis keys to prevent double-charging.
+- [ ] **Audit Logging**: Immutable logs for every financial state change for compliance.
+
+#### 4. Architecture Evolution (Microservices 2.0)
+- [ ] **Service Discovery**: Replace hardcoded URLs with **Consul** or **Etcd** to support dynamic scaling (Service Registry & Discovery).
+- [ ] **RPC Protocol**: Migrate internal service-to-service communication from HTTP/JSON to **gRPC/Protobuf** for higher performance and type safety.
+- [ ] **Distributed Locking**: Implement Redis-based distributed locks (Redlock) for critical sections not suitable for DB locking (e.g., user-level frequency control).
+- [ ] **Configuration Management**: Move from `.env` files to a centralized config server (e.g., Nacos/Etcd) with hot-reload capabilities.
+
+#### 5. Advanced Financial Architecture (The "Deep Water" Zone)
+- [ ] **TCC Pattern**: Implement **Try-Confirm-Cancel** for scenarios requiring stronger consistency than Saga (e.g., Cross-border asset transfer).
+- [ ] **Data Security**: Implement field-level encryption (AES-256) for PII (Personally Identifiable Information) using a KMS mock.
+- [ ] **Traffic Control**: Implement **Canary Deployment** (Grey Release) logic at the Gateway to route 1% of traffic to new service versions.
+- [ ] **Disaster Recovery**: Simulate a "Region Failover" scenario where the primary DB goes down, and the system automatically switches to a standby replica (Chaos Engineering).
 
 ### Phase 1: Containerization (Current)
 - [x] Dockerize all services (Multi-stage builds)
@@ -166,4 +226,20 @@ Base URL: `http://localhost:8000`
 ### Phase 5: Security & Resilience
 - [ ] **API Gateway Auth**: Implement JWT validation at the Gateway level.
 - [ ] **Rate Limiting**: Protect services using Redis-based rate limiting in the Gateway.
-- [ ] **Circuit Breaking**: Enhance clients with Hystrix/Resilience4j patterns.
+- [x] **Circuit Breaking**: Implemented using [sony/gobreaker](https://github.com/sony/gobreaker) in `pkg/clients` to prevent cascading failures.
+
+## 📚 Learning Gap Filling Plan (Roadmap to Senior Engineer)
+
+### 1. Quality Assurance & Testing Strategy
+- [ ] **Unit Testing**: Increase coverage for core logic (Order Service, Payment Calculation) using `testify`.
+- [ ] **Integration Testing**: Test database interactions and service flows using `dockertest`.
+- [ ] **Chaos Engineering**: Introduce random failures (latency, errors) to test system resilience.
+
+### 2. High-Scale Data Handling
+- [ ] **Fully Async Saga**: Refactor "Order Creation" to be fully event-driven (Fire-and-Forget) for higher throughput.
+- [ ] **Database Sharding**: Implement application-level sharding for `orders` table based on `user_id`.
+- [ ] **Read/Write Splitting**: Configure GORM to use Read Replicas for `GET` requests.
+
+### 3. Fintech Specifics
+- [ ] **Reconciliation System (对账)**: Create a daily job to verify Order vs Payment vs Bank records.
+- [ ] **Double-Entry Bookkeeping**: Refactor `wallet` service to use immutable ledger entries instead of simple balance updates.

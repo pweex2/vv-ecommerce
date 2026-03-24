@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,15 +18,19 @@ import (
 	"inventory-service/internal/service"
 	"vv-ecommerce/pkg/async"
 	"vv-ecommerce/pkg/database"
+	pb "vv-ecommerce/pkg/proto/inventory"
 	"vv-ecommerce/pkg/trace"
 
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
 type App struct {
-	Cfg    *config.Config
-	Router http.Handler
-	DB     *gorm.DB
+	Cfg        *config.Config
+	Router     http.Handler
+	DB         *gorm.DB
+	GRPCServer *grpc.Server
+	GRPCPort   int
 }
 
 func New(cfg *config.Config) (*App, func(), error) {
@@ -70,9 +75,17 @@ func New(cfg *config.Config) (*App, func(), error) {
 	// 3. Router
 	r := router.NewRouter(inventoryHandler)
 
+	// 4. gRPC Server Setup
+	grpcServer := grpc.NewServer()
+	grpcHandler := handler.NewGRPCHandler(inventoryService)
+	pb.RegisterInventoryServiceServer(grpcServer, grpcHandler)
+
 	// Cleanup function
 	cleanup := func() {
 		log.Println("Cleaning up application resources...")
+		// Graceful Stop gRPC
+		grpcServer.GracefulStop()
+
 		if mq != nil {
 			mq.Close()
 		}
@@ -92,9 +105,11 @@ func New(cfg *config.Config) (*App, func(), error) {
 	}
 
 	return &App{
-		Cfg:    cfg,
-		Router: r,
-		DB:     db,
+		Cfg:        cfg,
+		Router:     r,
+		DB:         db,
+		GRPCServer: grpcServer,
+		GRPCPort:   9090, // Hardcoded for now, should be in config
 	}, cleanup, nil
 }
 
@@ -108,11 +123,24 @@ func (a *App) Run() error {
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
 
-	// Start the server in a goroutine
+	// Start the HTTP server in a goroutine
 	go func() {
-		log.Printf("Inventory Service running on port %d", a.Cfg.ServerPort)
+		log.Printf("Inventory Service (HTTP) running on port %d", a.Cfg.ServerPort)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
+		}
+	}()
+
+	// Start the gRPC server in a goroutine
+	go func() {
+		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", a.GRPCPort))
+		if err != nil {
+			serverErrors <- fmt.Errorf("failed to listen on gRPC port %d: %w", a.GRPCPort, err)
+			return
+		}
+		log.Printf("Inventory Service (gRPC) running on port %d", a.GRPCPort)
+		if err := a.GRPCServer.Serve(lis); err != nil {
+			serverErrors <- fmt.Errorf("gRPC server failed: %w", err)
 		}
 	}()
 
